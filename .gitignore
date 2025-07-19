@@ -1,0 +1,11 @@
+# rust working dir
+/target
+
+# nix
+.direnv/
+result
+
+db_storage/
+
+test_storage*
+.DS_Store
