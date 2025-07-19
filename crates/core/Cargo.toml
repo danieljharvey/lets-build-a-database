@@ -9,3 +9,6 @@ workspace = true
 
 [dependencies]
 serde_json = "*"
+
+[dev-dependencies]
+insta = { version = "*", features = ['json'] }

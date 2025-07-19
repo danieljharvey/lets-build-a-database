@@ -95,6 +95,7 @@
             pkgs.llvmPackages.clang
             pkgs.llvmPackages.libclang
 
+            pkgs.cargo-insta
             pkgs.cargo-machete
             pkgs.cargo-watch
             pkgs.rustfmt

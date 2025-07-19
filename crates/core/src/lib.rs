@@ -23,11 +23,11 @@ enum Type {
 
 fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
     match table_name.0.as_str() {
-        "animal" => vec![(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
+        "animal" => [(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
             .iter()
             .map(|(id, name, species)| json!({ "animal_id": id, "animal_name": name, "species_id": species }))
             .collect(),
-        "species" => vec![(1, "mammal"), (2, "reptile"), (3, "bird")]
+        "species" => [(1, "mammal"), (2, "reptile"), (3, "bird")]
             .iter()
             .map(|(id, name)| json!({"species_id": id, "species_name": name}))
             .collect(),
@@ -55,7 +55,8 @@ enum Op {
 }
 
 #[derive(Debug)]
-struct LeftJoin {
+struct Join {
+    join_type: JoinType,
     left_from: Box<Query>,
     right_from: Box<Query>,
     left_column_on: Column,
@@ -77,22 +78,27 @@ struct Filter {
 }
 
 #[derive(Debug)]
+pub enum JoinType {
+    LeftInner
+}
+
+#[derive(Debug)]
 enum Query {
     From(From),
     Filter(Filter),
-    LeftJoin(LeftJoin),
+    Join(Join),
 }
 
-fn run_query(query: &Query) -> Vec<serde_json::Value> {
+pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
     match query {
         Query::From(From { table_name }) => table_scan(table_name),
-        Query::Filter(Filter { from, filter }) => run_query(&from)
+        Query::Filter(Filter { from, filter }) => run_query(from)
             .into_iter()
             .filter(|row| apply_predicate(row, filter))
             .collect(),
-        Query::LeftJoin(LeftJoin { left_from, right_from , left_column_on, right_column_on }) => {
-            let left_rows = run_query(&left_from);
-            let right_rows = run_query(&right_from); 
+        Query::Join(Join { left_from, right_from , left_column_on, right_column_on, join_type }) => {
+            let left_rows = run_query(left_from);
+            let right_rows = run_query(right_from); 
 
             hash_join(left_rows,right_rows,left_column_on,right_column_on)            
         }
@@ -124,11 +130,8 @@ fn hash_join(left_rows: Vec<serde_json::Value>, right_rows: Vec<serde_json::Valu
         let value = right_object.get(&right_on.name).unwrap();
 
         // this assumes left join and ignores where there's no left match 
-        match stuff.get_mut(&calculate_hash(value)) {
-            Some(items) => {
+        if let Some(items) = stuff.get_mut(&calculate_hash(value)) {
                 items.push(right_object.clone());
-            },
-            None => {}
         }
     }
    
@@ -177,14 +180,8 @@ fn test_query_select_animals() {
     let query = Query::From(From {
         table_name: TableName("animal".to_string()),
     });
-    assert_eq!(
-        run_query(&query),
-        vec![
-            json!({"animal_id":1,"animal_name":"horse","species_id":1}),
-            json!({"animal_id":2,"animal_name":"dog","species_id":1}),
-            json!({"animal_id":3,"animal_name":"snake","species_id":2})
-        ]
-    );
+
+    insta::assert_json_snapshot!(run_query(&query));
 }
 
 #[test]
@@ -201,15 +198,14 @@ fn test_query_select_horse() {
             literal: "horse".into(),
         },
     });
-    assert_eq!(
-        run_query(&query),
-        vec![json!({"animal_id":1,"animal_name":"horse","species_id":1})]
-    );
+    
+    insta::assert_json_snapshot!(run_query(&query));
 }
 
 #[test]
 fn test_select_horse_and_species() {
-    let query = Query::LeftJoin(LeftJoin {
+    let query = Query::Join(Join {
+        join_type: JoinType::LeftInner,
         left_from: Box::new(Query::Filter(Filter {
             from: Box::new(Query::From(From {
                 table_name: TableName("animal".to_string()),
@@ -233,8 +229,38 @@ fn test_select_horse_and_species() {
         },
     });
 
-    assert_eq!(
-        run_query(&query,),
-        vec![json!({"animal_id":1,"animal_name":"horse","species_id":1,"species_name":"mammal"})]
-    );
+    insta::assert_json_snapshot!(run_query(&query));
 }
+
+
+#[test]
+fn test_select_species_and_animals() {
+    let query = Query::Join(Join {
+        join_type: JoinType::LeftInner,
+        left_from: Box::new(Query::Filter(Filter {
+            from: Box::new(Query::From(From {
+                table_name: TableName("species".to_string()),
+            })),
+            filter: Expr::ColumnComparison {
+                column: Column {
+                    name: "species_id".to_string(),
+                },
+                op: Op::Equals,
+                literal: 3.into(),
+            },
+        })),
+        right_from: Box::new(Query::From(From {
+            table_name: TableName("animal".to_string())
+        })),
+        left_column_on: Column {
+            name: "species_id".to_string(),
+        },
+        right_column_on: Column {
+            name: "species_id".to_string(),
+        },
+    });
+
+    insta::assert_json_snapshot!(run_query(&query));
+}
+
+
