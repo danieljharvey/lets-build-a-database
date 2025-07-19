@@ -1,0 +1,11 @@
+---
+source: crates/core/src/lib.rs
+expression: run_query(&query)
+---
+[
+  {
+    "AlbumId": 6,
+    "ArtistId": 4,
+    "Title": "Jagged Little Pill"
+  }
+]

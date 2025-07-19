@@ -1,0 +1,30 @@
+---
+source: crates/core/src/lib.rs
+expression: run_query(&query)
+---
+[
+  {
+    "AlbumId": 74,
+    "ArtistId": 82,
+    "Name": "Faith No More",
+    "Title": "Album Of The Year"
+  },
+  {
+    "AlbumId": 75,
+    "ArtistId": 82,
+    "Name": "Faith No More",
+    "Title": "Angel Dust"
+  },
+  {
+    "AlbumId": 76,
+    "ArtistId": 82,
+    "Name": "Faith No More",
+    "Title": "King For A Day Fool For A Lifetime"
+  },
+  {
+    "AlbumId": 77,
+    "ArtistId": 82,
+    "Name": "Faith No More",
+    "Title": "The Real Thing"
+  }
+]
