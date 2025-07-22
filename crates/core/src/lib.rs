@@ -1,25 +1,12 @@
+mod types;
+
 use serde_json::json;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
+use types::{Join,JoinType,Filter,TableName,Op,Column,From,Expr,Query};
 
-fn main() {}
-
-struct Table {
-    name: String,
-    columns: Vec<(String, Type)>,
-    //indexes: Vec<Index>
-}
-
-struct Index {
-    column: String,
-}
-
-enum Type {
-    Int,
-    String,
-}
 
 // scan of static values for now
 fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
@@ -45,61 +32,6 @@ fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
 
         _ => todo!("table not found {table_name:?}"),
     }
-}
-
-#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash)]
-struct Column {
-    name: String,
-}
-
-#[derive(Debug)]
-enum Expr {
-    ColumnComparison {
-        column: Column,
-        op: Op,
-        literal: serde_json::Value,
-    },
-}
-
-#[derive(Debug)]
-enum Op {
-    Equals,
-}
-
-#[derive(Debug)]
-struct Join {
-    join_type: JoinType,
-    left_from: Box<Query>,
-    right_from: Box<Query>,
-    left_column_on: Column,
-    right_column_on: Column,
-}
-
-#[derive(Debug)]
-struct TableName(pub String);
-
-#[derive(Debug)]
-struct From {
-    table_name: TableName,
-}
-
-#[derive(Debug)]
-struct Filter {
-    from: Box<Query>,
-    filter: Expr,
-}
-
-#[derive(Debug)]
-pub enum JoinType {
-    LeftInner,
-    LeftOuter,
-}
-
-#[derive(Debug)]
-enum Query {
-    From(From),
-    Filter(Filter),
-    Join(Join),
 }
 
 pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
