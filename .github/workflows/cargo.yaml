@@ -1,4 +1,4 @@
-name: test
+name: cargo
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
       - main
 
 jobs:
-  develop:
+  test:
     runs-on: ubuntu-latest
     permissions:
       id-token: "write"
