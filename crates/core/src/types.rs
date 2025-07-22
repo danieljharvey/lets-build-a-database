@@ -1,9 +1,8 @@
 use std::hash::Hash;
 
-
 #[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash)]
 pub struct Column {
-   pub  name: String,
+    pub name: String,
 }
 
 #[derive(Debug)]
@@ -55,4 +54,3 @@ pub enum Query {
     Filter(Filter),
     Join(Join),
 }
-

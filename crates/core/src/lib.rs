@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use types::{Join,JoinType,Filter,TableName,Op,Column,From,Expr,Query};
-
+use types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
 
 // scan of static values for now
 fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
@@ -22,12 +21,10 @@ fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
         "Album" => {
             let my_str = include_str!("../static/Album.json");
             serde_json::from_str::<serde_json::Value>(my_str).unwrap().as_array().unwrap().clone()
-            
         },
         "Artist" => {
             let my_str = include_str!("../static/Artist.json");
             serde_json::from_str::<serde_json::Value>(my_str).unwrap().as_array().unwrap().clone()
-            
         }
 
         _ => todo!("table not found {table_name:?}"),
@@ -259,19 +256,18 @@ fn test_select_species_and_animals_left_outer() {
 
 #[test]
 fn test_select_album() {
-    let query = 
-        Query::Filter(Filter {
-            from: Box::new(Query::From(From {
-                table_name: TableName("Album".to_string()),
-            })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "Title".to_string(),
-                },
-                op: Op::Equals,
-                literal: "Jagged Little Pill".into(),
+    let query = Query::Filter(Filter {
+        from: Box::new(Query::From(From {
+            table_name: TableName("Album".to_string()),
+        })),
+        filter: Expr::ColumnComparison {
+            column: Column {
+                name: "Title".to_string(),
             },
-        });
+            op: Op::Equals,
+            literal: "Jagged Little Pill".into(),
+        },
+    });
 
     insta::assert_json_snapshot!(run_query(&query));
 }
@@ -305,4 +301,3 @@ fn test_select_album_and_artist() {
 
     insta::assert_json_snapshot!(run_query(&query));
 }
-

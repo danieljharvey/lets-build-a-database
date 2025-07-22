@@ -6,7 +6,6 @@
 
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -28,7 +27,12 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-        src = craneLib.cleanCargoSource (craneLib.path ./.);
+        src = let
+          isJsonFile = path: _type: builtins.match ".*json" path != null;
+          isSourceFile = path: type:
+            isJsonFile path type
+            || craneLib.filterCargoSources path type;
+        in pkgs.lib.cleanSourceWith { src = craneLib.path ./. ; filter = isSourceFile; };
 
         nativeBuildInputs = [ ];
 

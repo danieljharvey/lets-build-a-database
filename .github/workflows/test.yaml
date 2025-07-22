@@ -1,0 +1,31 @@
+name: test
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  develop:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: "write"
+      contents: "read"
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+
+      - name: Fetch rustup stuff 
+        run: rustup --show
+
+      - name: cargo build
+        run: cargo build
+
+      - name: cargo test
+        run: cargo test
+
