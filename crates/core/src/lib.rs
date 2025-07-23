@@ -1,5 +1,7 @@
+mod parser;
 mod types;
 
+use parser::parse;
 use serde_json::json;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
@@ -139,27 +141,14 @@ fn apply_predicate(row: &serde_json::Value, where_expr: &Expr) -> bool {
 
 #[test]
 fn test_query_select_animals() {
-    let query = Query::From(From {
-        table_name: TableName("animal".to_string()),
-    });
+    let query = parse("SELECT * FROM animal").unwrap();
 
     insta::assert_json_snapshot!(run_query(&query));
 }
 
 #[test]
 fn test_query_select_horse() {
-    let query = Query::Filter(Filter {
-        from: Box::new(Query::From(From {
-            table_name: TableName("animal".to_string()),
-        })),
-        filter: Expr::ColumnComparison {
-            column: Column {
-                name: "animal_name".to_string(),
-            },
-            op: Op::Equals,
-            literal: "horse".into(),
-        },
-    });
+    let query = parse("select * from animal where animal_name = 'horse'").unwrap();
 
     insta::assert_json_snapshot!(run_query(&query));
 }
@@ -256,18 +245,7 @@ fn test_select_species_and_animals_left_outer() {
 
 #[test]
 fn test_select_album() {
-    let query = Query::Filter(Filter {
-        from: Box::new(Query::From(From {
-            table_name: TableName("Album".to_string()),
-        })),
-        filter: Expr::ColumnComparison {
-            column: Column {
-                name: "Title".to_string(),
-            },
-            op: Op::Equals,
-            literal: "Jagged Little Pill".into(),
-        },
-    });
+    let query = parse("select * from Album where Title = 'Jagged Little Pill'").unwrap();
 
     insta::assert_json_snapshot!(run_query(&query));
 }

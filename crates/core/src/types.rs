@@ -5,7 +5,7 @@ pub struct Column {
     pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Expr {
     ColumnComparison {
         column: Column,
@@ -14,12 +14,12 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Op {
     Equals,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Join {
     pub join_type: JoinType,
     pub left_from: Box<Query>,
@@ -28,27 +28,27 @@ pub struct Join {
     pub right_column_on: Column,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TableName(pub String);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct From {
     pub table_name: TableName,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Filter {
     pub from: Box<Query>,
     pub filter: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum JoinType {
     LeftInner,
     LeftOuter,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Query {
     From(From),
     Filter(Filter),
