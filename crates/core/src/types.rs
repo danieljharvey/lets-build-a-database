@@ -44,6 +44,18 @@ pub struct Filter {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum ProjectFields {
+    Star,
+    Fields(Vec<Column>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Project {
+    pub from: Box<Query>,
+    pub fields: ProjectFields,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum JoinType {
     Inner,
     LeftOuter,
@@ -54,4 +66,5 @@ pub enum Query {
     From(From),
     Filter(Filter),
     Join(Join),
+    Project(Project),
 }

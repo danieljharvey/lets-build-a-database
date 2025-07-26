@@ -2,7 +2,9 @@ use sqlparser::ast::{self};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
-use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
+use crate::types::{
+    Column, Expr, Filter, From, Join, JoinType, Op, Project, ProjectFields, Query, TableName,
+};
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -27,6 +29,7 @@ pub enum ParseError {
     GroupByNotSupported,
     SortByNotSupported,
     ExpectedIdent,
+    UnsupportedProjectionField,
     Join(JoinParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
@@ -174,10 +177,10 @@ fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
         return Err(ParseError::SortByNotSupported);
     }
 
-    // TODO- make this work
-    from_projection(projection);
-
-    let mut query = from_from(from)?;
+    let mut query = Query::Project(Project {
+        from: Box::new(from_from(from)?),
+        fields: from_projection(projection)?,
+    });
 
     if let Some(filter) = selection.as_ref().map(from_selection).transpose()? {
         query = Query::Filter(Filter {
@@ -314,7 +317,28 @@ fn table_name_from_object_name(object_name: &ast::ObjectName) -> Result<TableNam
     }
 }
 
-fn from_projection(_projection: &[ast::SelectItem]) {}
+fn from_projection(select_items: &[ast::SelectItem]) -> Result<ProjectFields, ParseError> {
+    if select_items.len() == 1 {
+        if let Some(first) = select_items.first() {
+            if let ast::SelectItem::Wildcard(_) = first {
+                return Ok(ProjectFields::Star);
+            }
+        }
+    }
+
+    let mut fields = vec![];
+
+    for select_item in select_items {
+        match select_item {
+            ast::SelectItem::UnnamedExpr(expr) => {
+                let identifier = identifier_from_selection(expr)?;
+                fields.push(identifier);
+            },
+            _ => return Err(ParseError::UnsupportedProjectionField),
+        }
+    }
+    Ok(ProjectFields::Fields(vec![]))
+}
 
 #[cfg(test)]
 mod tests {
