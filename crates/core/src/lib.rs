@@ -1,7 +1,7 @@
 mod parser;
 mod types;
 
-use parser::parse;
+pub use parser::parse;
 use serde_json::json;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
@@ -139,143 +139,93 @@ fn apply_predicate(row: &serde_json::Value, where_expr: &Expr) -> bool {
     }
 }
 
-#[test]
-fn test_query_select_animals() {
-    let query = parse("SELECT * FROM animal").unwrap();
+#[cfg(test)]
+mod tests {
+    use crate::{parser::parse, run_query};
 
-    insta::assert_json_snapshot!(run_query(&query));
-}
+    #[test]
+    fn test_query_select_animals() {
+        let query = parse("SELECT * FROM animal").unwrap();
 
-#[test]
-fn test_query_select_horse() {
-    let query = parse("select * from animal where animal_name = 'horse'").unwrap();
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 
-    insta::assert_json_snapshot!(run_query(&query));
-}
+    #[test]
+    fn test_query_select_horse() {
+        let query = parse("select * from animal where animal_name = 'horse'").unwrap();
 
-#[test]
-fn test_select_horse_and_species() {
-    let query = Query::Join(Join {
-        join_type: JoinType::LeftInner,
-        left_from: Box::new(Query::Filter(Filter {
-            from: Box::new(Query::From(From {
-                table_name: TableName("animal".to_string()),
-            })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "animal_name".to_string(),
-                },
-                op: Op::Equals,
-                literal: "horse".into(),
-            },
-        })),
-        right_from: Box::new(Query::From(From {
-            table_name: TableName("species".to_string()),
-        })),
-        left_column_on: Column {
-            name: "species_id".to_string(),
-        },
-        right_column_on: Column {
-            name: "species_id".to_string(),
-        },
-    });
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 
-    insta::assert_json_snapshot!(run_query(&query));
-}
+    #[test]
+    fn test_select_horse_and_species() {
+        let query = parse(
+            r#"
+        select * from animal 
+        join species 
+            on species_id 
+        where animal_name = 'horse'"#,
+        )
+        .unwrap();
 
-#[test]
-fn test_select_species_and_animals() {
-    let query = Query::Join(Join {
-        join_type: JoinType::LeftInner,
-        left_from: Box::new(Query::Filter(Filter {
-            from: Box::new(Query::From(From {
-                table_name: TableName("species".to_string()),
-            })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "species_id".to_string(),
-                },
-                op: Op::Equals,
-                literal: 3.into(),
-            },
-        })),
-        right_from: Box::new(Query::From(From {
-            table_name: TableName("animal".to_string()),
-        })),
-        left_column_on: Column {
-            name: "species_id".to_string(),
-        },
-        right_column_on: Column {
-            name: "species_id".to_string(),
-        },
-    });
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 
-    insta::assert_json_snapshot!(run_query(&query));
-}
+    #[test]
+    fn test_select_species_and_animals() {
+        let query = parse(
+            r#"
+        select * from species 
+          join animal on species_id
+        where
+          species_id = 3 
+    "#,
+        )
+        .unwrap();
 
-#[test]
-fn test_select_species_and_animals_left_outer() {
-    let query = Query::Join(Join {
-        join_type: JoinType::LeftOuter,
-        left_from: Box::new(Query::Filter(Filter {
-            from: Box::new(Query::From(From {
-                table_name: TableName("species".to_string()),
-            })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "species_id".to_string(),
-                },
-                op: Op::Equals,
-                literal: 3.into(),
-            },
-        })),
-        right_from: Box::new(Query::From(From {
-            table_name: TableName("animal".to_string()),
-        })),
-        left_column_on: Column {
-            name: "species_id".to_string(),
-        },
-        right_column_on: Column {
-            name: "species_id".to_string(),
-        },
-    });
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 
-    insta::assert_json_snapshot!(run_query(&query));
-}
+    #[test]
+    fn test_select_species_and_animals_left_outer() {
+        let query = parse(
+            r#"
+        select * from species 
+          left outer join animal on species_id
+        where
+          species_id = 3 
+    "#,
+        )
+        .unwrap();
 
-#[test]
-fn test_select_album() {
-    let query = parse("select * from Album where Title = 'Jagged Little Pill'").unwrap();
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 
-    insta::assert_json_snapshot!(run_query(&query));
-}
+    #[test]
+    fn test_select_album() {
+        let query = parse(
+            r#"
+        select * from Album 
+        where Title = 'Jagged Little Pill'
+    "#,
+        )
+        .unwrap();
 
-#[test]
-fn test_select_album_and_artist() {
-    let query = Query::Join(Join {
-        join_type: JoinType::LeftInner,
-        left_from: Box::new(Query::Filter(Filter {
-            from: Box::new(Query::From(From {
-                table_name: TableName("Album".to_string()),
-            })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "ArtistId".to_string(),
-                },
-                op: Op::Equals,
-                literal: 82.into(),
-            },
-        })),
-        right_from: Box::new(Query::From(From {
-            table_name: TableName("Artist".to_string()),
-        })),
-        left_column_on: Column {
-            name: "ArtistId".to_string(),
-        },
-        right_column_on: Column {
-            name: "ArtistId".to_string(),
-        },
-    });
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 
-    insta::assert_json_snapshot!(run_query(&query));
+    #[test]
+    fn test_select_album_and_artist() {
+        let query = parse(
+            r#"
+        select * from Album 
+          join Artist on ArtistId
+        where
+          ArtistId = 82
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query));
+    }
 }

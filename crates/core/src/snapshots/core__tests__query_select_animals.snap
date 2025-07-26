@@ -1,6 +1,6 @@
 ---
 source: crates/core/src/lib.rs
-expression: result
+expression: run_query(&query)
 ---
 [
   {

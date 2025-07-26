@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash)]
+#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
 pub struct Column {
     pub name: String,
 }
@@ -21,6 +21,7 @@ pub enum Op {
 
 #[derive(Debug, PartialEq)]
 pub struct Join {
+    #[allow(clippy::struct_field_names)]
     pub join_type: JoinType,
     pub left_from: Box<Query>,
     pub right_from: Box<Query>,
@@ -44,7 +45,7 @@ pub struct Filter {
 
 #[derive(Debug, PartialEq)]
 pub enum JoinType {
-    LeftInner,
+    Inner,
     LeftOuter,
 }
 

@@ -10,3 +10,5 @@ machete:
 fix:
   cargo clippy --fix --no-deps --allow-dirty
 
+run sql:
+  cargo run --bin cli -- --sql '{{ sql }}' | jq

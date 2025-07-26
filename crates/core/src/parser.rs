@@ -2,12 +2,11 @@ use sqlparser::ast::{self};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
-use crate::types::{Column, Expr, Filter, From, Op, Query, TableName};
+use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
 
 #[derive(Debug)]
 pub enum ParseError {
     NoStatements,
-    JoinsNotSupported,
     OnlyQueryIsSupported,
     WithNotSupported,
     OrderByNotSupported,
@@ -28,9 +27,22 @@ pub enum ParseError {
     GroupByNotSupported,
     SortByNotSupported,
     ExpectedIdent,
+    Join(JoinParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
     UnknownBinaryOperator,
+}
+
+#[derive(Debug)]
+pub enum JoinParseError {
+    UnsupportedJoinOperator,
+    UnsupportedJoinConstraint,
+}
+
+impl std::convert::From<JoinParseError> for ParseError {
+    fn from(join_parse_error: JoinParseError) -> ParseError {
+        ParseError::Join(join_parse_error)
+    }
 }
 
 pub fn parse(sql: &str) -> Result<Query, ParseError> {
@@ -38,7 +50,7 @@ pub fn parse(sql: &str) -> Result<Query, ParseError> {
 
     let ast = Parser::parse_sql(&dialect, sql).unwrap();
 
-    if let Some(first_statement) = ast.iter().next() {
+    if let Some(first_statement) = ast.first() {
         from_statement(first_statement)
     } else {
         Err(ParseError::NoStatements)
@@ -162,15 +174,12 @@ fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
         return Err(ParseError::SortByNotSupported);
     }
 
-    from_projection(projection)?;
+    // TODO- make this work
+    from_projection(projection);
 
-    let mut query = Query::From(from_from(from)?);
+    let mut query = from_from(from)?;
 
-    if let Some(filter) = selection
-        .as_ref()
-        .map(|expr| from_selection(expr))
-        .transpose()?
-    {
+    if let Some(filter) = selection.as_ref().map(from_selection).transpose()? {
         query = Query::Filter(Filter {
             filter,
             from: Box::new(query),
@@ -202,14 +211,13 @@ fn value_from_selection(expr: &ast::Expr) -> Result<serde_json::Value, ParseErro
             let ast::ValueWithSpan {
                 value: inner_value, ..
             } = value;
-            match inner_value {
-                ast::Value::SingleQuotedString(s) => Ok(s.clone().into()),
-                _ => {
-                    // last resort, stringify the thing and throw it at serde_json decode
-                    let val_string = value.to_string();
-                    serde_json::from_str(val_string.as_str())
-                        .map_err(|e| ParseError::SerdeJsonError(val_string, e))
-                }
+            if let ast::Value::SingleQuotedString(s) = inner_value {
+                Ok(s.clone().into())
+            } else {
+                // last resort, stringify the thing and throw it at serde_json decode
+                let val_string = value.to_string();
+                serde_json::from_str(val_string.as_str())
+                    .map_err(|e| ParseError::SerdeJsonError(val_string, e))
             }
         }
         _ => Err(ParseError::ExpectedValue(expr.clone())),
@@ -227,32 +235,71 @@ fn from_selection(expr: &ast::Expr) -> Result<Expr, ParseError> {
     }
 }
 
-fn from_from(froms: &Vec<ast::TableWithJoins>) -> Result<From, ParseError> {
+fn from_from(froms: &[ast::TableWithJoins]) -> Result<Query, ParseError> {
     if let Some(table_with_joins) = froms.iter().next() {
         let ast::TableWithJoins { relation, joins } = table_with_joins;
-        if !joins.is_empty() {
-            return Err(ParseError::JoinsNotSupported);
-        }
-        if let ast::TableFactor::Table {
-            name,
-            alias: _,
-            args: _,
-            with_hints: _,
-            version: _,
-            with_ordinality: _,
-            partitions: _,
-            json_path: _,
-            sample: _,
-            index_hints: _,
-        } = relation
-        {
-            let table_name = table_name_from_object_name(name)?;
-            Ok(From { table_name })
-        } else {
-            Err(ParseError::TableOnlyInFrom)
-        }
+        let from = from_relation(relation)?;
+
+        joins
+            .iter()
+            .try_fold(Query::From(from), |query, join| from_join(join, query))
     } else {
         Err(ParseError::EmptyFromNotSupported)
+    }
+}
+
+fn from_relation(table: &ast::TableFactor) -> Result<From, ParseError> {
+    if let ast::TableFactor::Table {
+        name,
+        alias: _,
+        args: _,
+        with_hints: _,
+        version: _,
+        with_ordinality: _,
+        partitions: _,
+        json_path: _,
+        sample: _,
+        index_hints: _,
+    } = table
+    {
+        let table_name = table_name_from_object_name(name)?;
+        Ok(From { table_name })
+    } else {
+        Err(ParseError::TableOnlyInFrom)
+    }
+}
+
+fn from_join(join: &ast::Join, query: Query) -> Result<Query, ParseError> {
+    let from = from_relation(&join.relation)?;
+
+    let (join_type, left_column_on, right_column_on) = from_join_operator(&join.join_operator)?;
+
+    let join = Join {
+        join_type,
+        left_from: Box::new(query),
+        right_from: Box::new(Query::From(from)),
+        left_column_on,
+        right_column_on,
+    };
+
+    Ok(Query::Join(join))
+}
+
+fn from_join_operator(
+    join_operator: &ast::JoinOperator,
+) -> Result<(JoinType, Column, Column), ParseError> {
+    let (join_type, constraint) = match join_operator {
+        ast::JoinOperator::Join(constraint) => Ok((JoinType::Inner, constraint)),
+        ast::JoinOperator::LeftOuter(constraint) => Ok((JoinType::LeftOuter, constraint)),
+        _ => Err(JoinParseError::UnsupportedJoinOperator),
+    }?;
+
+    match constraint {
+        ast::JoinConstraint::On(expr) => {
+            let identifier = identifier_from_selection(expr)?;
+            Ok((join_type, identifier.clone(), identifier))
+        }
+        _ => Err(ParseError::from(JoinParseError::UnsupportedJoinConstraint)),
     }
 }
 
@@ -267,13 +314,11 @@ fn table_name_from_object_name(object_name: &ast::ObjectName) -> Result<TableNam
     }
 }
 
-fn from_projection(_projection: &Vec<ast::SelectItem>) -> Result<(), ParseError> {
-    Ok(())
-}
+fn from_projection(_projection: &[ast::SelectItem]) {}
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{Column, Expr, Filter, From, Op, Query, TableName};
+    use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
 
     use super::parse;
 
@@ -304,6 +349,47 @@ mod tests {
         });
 
         let result = parse("SELECT * FROM albums WHERE album_id = 1").unwrap();
+
+        assert_eq!(result, expected)
+    }
+
+    #[test]
+    fn test_parse_basic_join() {
+        let expected = Query::Filter(Filter {
+            from: Box::new(Query::Join(Join {
+                join_type: JoinType::Inner,
+                left_from: Box::new(Query::From(From {
+                    table_name: TableName("species".to_string()),
+                })),
+                right_from: Box::new(Query::From(From {
+                    table_name: TableName("animal".to_string()),
+                })),
+                left_column_on: Column {
+                    name: "species_id".to_string(),
+                },
+                right_column_on: Column {
+                    name: "species_id".to_string(),
+                },
+            })),
+            filter: Expr::ColumnComparison {
+                column: Column {
+                    name: "species_id".to_string(),
+                },
+                op: Op::Equals,
+                literal: 3.into(),
+            },
+        });
+
+        let result = parse(
+            r#"
+            SELECT * FROM species
+            JOIN 
+              animal ON species_id
+            WHERE
+              species_id = 3
+            "#,
+        )
+        .unwrap();
 
         assert_eq!(result, expected)
     }
