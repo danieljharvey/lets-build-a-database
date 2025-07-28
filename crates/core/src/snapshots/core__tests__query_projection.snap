@@ -1,0 +1,9 @@
+---
+source: crates/core/src/lib.rs
+expression: run_query(&query)
+---
+[
+  {
+    "animal_name": "horse"
+  }
+]

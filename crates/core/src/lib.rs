@@ -3,11 +3,14 @@ mod types;
 
 pub use parser::parse;
 use serde_json::json;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
+use types::{
+    Column, Expr, Filter, From, Join, JoinType, Op, Project, ProjectFields, Query, TableName,
+};
 
 // scan of static values for now
 fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
@@ -40,6 +43,17 @@ pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
             .into_iter()
             .filter(|row| apply_predicate(row, filter))
             .collect(),
+        Query::Project(Project { from, fields }) => {
+            let inner = run_query(from);
+
+            match fields {
+                ProjectFields::Star => inner,
+                ProjectFields::Fields(fields) => inner
+                    .into_iter()
+                    .map(|row| project_fields(row, fields))
+                    .collect(),
+            }
+        }
         Query::Join(Join {
             left_from,
             right_from,
@@ -139,6 +153,20 @@ fn apply_predicate(row: &serde_json::Value, where_expr: &Expr) -> bool {
     }
 }
 
+// filter columns out of a row
+fn project_fields(row: serde_json::Value, fields: &[Column]) -> serde_json::Value {
+    let field_set: BTreeSet<_> = fields.iter().map(|c| c.name.clone()).collect();
+    if let serde_json::Value::Object(map) = row {
+        let new_map = map
+            .into_iter()
+            .filter(|(k, _)| field_set.contains(k))
+            .collect();
+        serde_json::Value::Object(new_map)
+    } else {
+        row
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{parser::parse, run_query};
@@ -153,6 +181,13 @@ mod tests {
     #[test]
     fn test_query_select_horse() {
         let query = parse("select * from animal where animal_name = 'horse'").unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query));
+    }
+
+    #[test]
+    fn test_query_projection() {
+        let query = parse("select animal_name from animal where animal_name = 'horse'").unwrap();
 
         insta::assert_json_snapshot!(run_query(&query));
     }
