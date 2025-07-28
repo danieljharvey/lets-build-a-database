@@ -1,9 +1,9 @@
 mod parser;
 mod types;
 
-use std::collections::BTreeSet;
 pub use parser::parse;
 use serde_json::json;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
@@ -48,9 +48,10 @@ pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
 
             match fields {
                 ProjectFields::Star => inner,
-                ProjectFields::Fields(fields) => {
-                    inner.into_iter().map(|row| project_fields(row,fields)).collect()
-                } 
+                ProjectFields::Fields(fields) => inner
+                    .into_iter()
+                    .map(|row| project_fields(row, fields))
+                    .collect(),
             }
         }
         Query::Join(Join {
@@ -153,16 +154,17 @@ fn apply_predicate(row: &serde_json::Value, where_expr: &Expr) -> bool {
 }
 
 // filter columns out of a row
-fn project_fields(mut row: serde_json::Value, fields: &Vec<Column>) -> serde_json::Value {
-    let field_set: BTreeSet<String> = BTreeSet::from_iter(fields.iter().map(|c| c.name.clone()));
-    let mut object = row.as_object_mut().unwrap();
-    
-    for k in object.keys() {
-        if !field_set.contains(k) {
-            let _ = object.remove(k);
-        }
+fn project_fields(row: serde_json::Value, fields: &[Column]) -> serde_json::Value {
+    let field_set: BTreeSet<_> = fields.iter().map(|c| c.name.clone()).collect();
+    if let serde_json::Value::Object(map) = row {
+        let new_map = map
+            .into_iter()
+            .filter(|(k, _)| field_set.contains(k))
+            .collect();
+        serde_json::Value::Object(new_map)
+    } else {
+        row
     }
-    serde_json::Value::Object(*object)
 }
 
 #[cfg(test)]
