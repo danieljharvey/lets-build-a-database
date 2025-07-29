@@ -5,6 +5,14 @@ pub struct Column {
     pub name: String,
 }
 
+impl std::convert::From<&str> for Column {
+    fn from(name: &str) -> Column {
+        Column {
+            name: name.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     ColumnComparison {
@@ -61,4 +69,32 @@ pub enum Query {
     Filter(Filter),
     Join(Join),
     Project(Project),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Row {
+    pub items: Vec<serde_json::Value>,
+}
+
+impl Row {
+    pub fn get_column(&self, column: &Column, schema: &Schema) -> Option<&serde_json::Value> {
+        let index = schema.get_index_for_column(column)?;
+
+        self.items.get(index)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Schema {
+    pub columns: Vec<Column>,
+}
+
+impl Schema {
+    pub fn get_index_for_column(&self, column: &Column) -> Option<usize> {
+        self.columns
+            .iter()
+            .enumerate()
+            .find(|(_, column_name)| column_name == &column)
+            .map(|(i, _)| i)
+    }
 }

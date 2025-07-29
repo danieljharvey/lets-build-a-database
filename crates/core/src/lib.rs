@@ -8,11 +8,41 @@ use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
+use types::Row;
+use types::Schema;
 use types::{Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableName};
 
-// scan of static values for now
-fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
+// hard coded vec of column names for now
+fn schema(table_name: &TableName) -> Vec<Column> {
     match table_name.0.as_str() {
+        "animal" => vec![
+            "animal_id".into(),
+            "animal_name".into(),
+            "species_id".into(),
+        ],
+        "species" => vec!["species_id".into(), "species_name".into()],
+        "Album" => vec!["AlbumId".into(), "Title".into(), "ArtistId".into()],
+        "Artist" => vec!["ArtistId".into(), "Name".into()],
+        "Track" => vec![
+            "TrackId".into(),
+            "Name".into(),
+            "AlbumId".into(),
+            "MediaTypeId".into(),
+            "GenreId".into(),
+            "Composer".into(),
+            "Milliseconds".into(),
+            "Bytes".into(),
+            "UnitPrice".into(),
+        ],
+        _ => todo!("unknown schema"),
+    }
+}
+
+// scan of static values for now
+fn table_scan(table_name: &TableName) -> (Schema, Vec<Row>) {
+    let columns = schema(table_name);
+
+    let raw = match table_name.0.as_str() {
         "animal" => [(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
             .iter()
             .map(|(id, name, species)| json!({ "animal_id": id, "animal_name": name, "species_id": species }))
@@ -29,21 +59,60 @@ fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
             let my_str = include_str!("../static/Artist.json");
             serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
         }
+        "Track" => {
+            let my_str = include_str!("../static/Track.json");
+            serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
+        }
         _ => todo!("table not found {table_name:?}"),
-    }
+    };
+
+    let rows = raw.into_iter().map(|raw| into_row(raw, &columns)).collect();
+
+    (Schema { columns }, rows)
 }
 
-pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
+fn into_row(value: serde_json::Value, columns: &Vec<Column>) -> Row {
+    let serde_json::Value::Object(mut map) = value else {
+        panic!("what is this")
+    };
+
+    let mut items = vec![];
+
+    // collect items in order
+    for column in columns {
+        let Some(item) = map.remove(&column.name) else {
+            panic!("could not find {}", column.name);
+        };
+
+        items.push(item)
+    }
+
+    Row { items }
+}
+
+pub fn run_query(query: &Query) -> (Schema, Vec<Row>) {
     match query {
         Query::From(From { table_name }) => table_scan(table_name),
-        Query::Filter(Filter { from, filter }) => run_query(from)
-            .into_iter()
-            .filter(|row| apply_predicate(row, filter))
-            .collect(),
-        Query::Project(Project { from, fields }) => run_query(from)
-            .into_iter()
-            .map(|row| project_fields(row, fields))
-            .collect(),
+        Query::Filter(Filter { from, filter }) => {
+            let (schema, rows) = run_query(from);
+            let rows = rows
+                .into_iter()
+                .filter(|row| apply_predicate(row, &schema, filter))
+                .collect();
+
+            (schema, rows)
+        }
+        Query::Project(Project { from, fields }) => {
+            let (schema, rows) = run_query(from);
+
+            // TODO, we'll probably want to change the schema here
+            (
+                schema,
+                rows.into_iter()
+                    .map(|row| project_fields(row, fields))
+                    .collect(),
+            )
+        }
         Query::Join(Join {
             left_from,
             right_from,
@@ -51,16 +120,18 @@ pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
             right_column_on,
             join_type,
         }) => {
-            let left_rows = run_query(left_from);
-            let right_rows = run_query(right_from);
+            let (left_schema, left_rows) = run_query(left_from);
+            let (right_schema, right_rows) = run_query(right_from);
 
+            todo!("join");
+            /*
             hash_join(
                 left_rows,
                 right_rows,
                 left_column_on,
                 right_column_on,
                 join_type,
-            )
+            )*/
         }
     }
 }
@@ -125,16 +196,14 @@ fn hash_join(
     output_rows
 }
 
-fn apply_predicate(row: &serde_json::Value, where_expr: &Expr) -> bool {
+fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> bool {
     match where_expr {
         Expr::ColumnComparison {
             column,
             op,
             literal,
         } => {
-            let row_object = row.as_object().unwrap();
-
-            let value = row_object.get(&column.name).unwrap();
+            let value = row.get_column(&column, schema).unwrap();
 
             match op {
                 Op::Equals => value == literal,
@@ -144,7 +213,7 @@ fn apply_predicate(row: &serde_json::Value, where_expr: &Expr) -> bool {
 }
 
 // filter columns out of a row
-fn project_fields(row: serde_json::Value, fields: &[Column]) -> serde_json::Value {
+fn project_fields(row: Row, fields: &[Column]) -> Row {
     let field_set: BTreeSet<_> = fields.iter().map(|c| c.name.clone()).collect();
     if let serde_json::Value::Object(map) = row {
         let new_map = map
