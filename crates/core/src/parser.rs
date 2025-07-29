@@ -2,9 +2,7 @@ use sqlparser::ast::{self};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
-use crate::types::{
-    Column, Expr, Filter, From, Join, JoinType, Op, Project, ProjectFields, Query, TableName,
-};
+use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableName};
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -186,10 +184,12 @@ fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
         });
     }
 
-    query = Query::Project(Project {
-        from: Box::new(query),
-        fields: from_projection(projection)?,
-    });
+    if let Some(fields) = from_projection(projection)? {
+        query = Query::Project(Project {
+            from: Box::new(query),
+            fields,
+        });
+    }
 
     Ok(query)
 }
@@ -319,10 +319,10 @@ fn table_name_from_object_name(object_name: &ast::ObjectName) -> Result<TableNam
     }
 }
 
-fn from_projection(select_items: &[ast::SelectItem]) -> Result<ProjectFields, ParseError> {
+fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column>>, ParseError> {
     if select_items.len() == 1 {
         if let Some(ast::SelectItem::Wildcard(_)) = select_items.first() {
-            return Ok(ProjectFields::Star);
+            return Ok(None);
         }
     }
 
@@ -337,24 +337,19 @@ fn from_projection(select_items: &[ast::SelectItem]) -> Result<ProjectFields, Pa
             _ => return Err(ParseError::UnsupportedProjectionField),
         }
     }
-    Ok(ProjectFields::Fields(fields))
+    Ok(Some(fields))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{
-        Column, Expr, Filter, From, Join, JoinType, Op, Project, ProjectFields, Query, TableName,
-    };
+    use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
 
     use super::parse;
 
     #[test]
     fn test_parse_basic_select() {
-        let expected = Query::Project(Project {
-            from: Box::new(Query::From(From {
-                table_name: TableName("albums".into()),
-            })),
-            fields: ProjectFields::Star,
+        let expected = Query::From(From {
+            table_name: TableName("albums".into()),
         });
 
         let result = parse("SELECT * FROM albums").unwrap();
@@ -364,20 +359,17 @@ mod tests {
 
     #[test]
     fn test_parse_basic_select_with_where() {
-        let expected = Query::Project(Project {
-            from: Box::new(Query::Filter(Filter {
-                from: Box::new(Query::From(From {
-                    table_name: TableName("albums".into()),
-                })),
-                filter: Expr::ColumnComparison {
-                    column: Column {
-                        name: "album_id".to_string(),
-                    },
-                    op: Op::Equals,
-                    literal: 1.into(),
-                },
+        let expected = Query::Filter(Filter {
+            from: Box::new(Query::From(From {
+                table_name: TableName("albums".into()),
             })),
-            fields: ProjectFields::Star,
+            filter: Expr::ColumnComparison {
+                column: Column {
+                    name: "album_id".to_string(),
+                },
+                op: Op::Equals,
+                literal: 1.into(),
+            },
         });
 
         let result = parse("SELECT * FROM albums WHERE album_id = 1").unwrap();
@@ -387,32 +379,29 @@ mod tests {
 
     #[test]
     fn test_parse_basic_join() {
-        let expected = Query::Project(Project {
-            from: Box::new(Query::Filter(Filter {
-                from: Box::new(Query::Join(Join {
-                    join_type: JoinType::Inner,
-                    left_from: Box::new(Query::From(From {
-                        table_name: TableName("species".to_string()),
-                    })),
-                    right_from: Box::new(Query::From(From {
-                        table_name: TableName("animal".to_string()),
-                    })),
-                    left_column_on: Column {
-                        name: "species_id".to_string(),
-                    },
-                    right_column_on: Column {
-                        name: "species_id".to_string(),
-                    },
+        let expected = Query::Filter(Filter {
+            from: Box::new(Query::Join(Join {
+                join_type: JoinType::Inner,
+                left_from: Box::new(Query::From(From {
+                    table_name: TableName("species".to_string()),
                 })),
-                filter: Expr::ColumnComparison {
-                    column: Column {
-                        name: "species_id".to_string(),
-                    },
-                    op: Op::Equals,
-                    literal: 3.into(),
+                right_from: Box::new(Query::From(From {
+                    table_name: TableName("animal".to_string()),
+                })),
+                left_column_on: Column {
+                    name: "species_id".to_string(),
+                },
+                right_column_on: Column {
+                    name: "species_id".to_string(),
                 },
             })),
-            fields: ProjectFields::Star,
+            filter: Expr::ColumnComparison {
+                column: Column {
+                    name: "species_id".to_string(),
+                },
+                op: Op::Equals,
+                literal: 3.into(),
+            },
         });
 
         let result = parse(
