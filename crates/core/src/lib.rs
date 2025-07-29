@@ -3,7 +3,6 @@ mod types;
 
 pub use parser::parse;
 use serde_json::json;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
@@ -133,15 +132,15 @@ pub fn run_query(query: &Query) -> QueryStep {
                 rows: right_rows,
             } = run_query(right_from);
 
-            todo!("join");
-            /*
             hash_join(
                 left_rows,
+                &left_schema,
                 right_rows,
+                &right_schema,
                 left_column_on,
                 right_column_on,
                 join_type,
-            )*/
+            )
         }
     }
 }
@@ -153,57 +152,62 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 }
 
 fn hash_join(
-    left_rows: Vec<serde_json::Value>,
-    right_rows: Vec<serde_json::Value>,
+    left_rows: Vec<Row>,
+    left_schema: &Schema,
+    right_rows: Vec<Row>,
+    right_schema: &Schema,
     left_on: &Column,
     right_on: &Column,
     join_type: &JoinType,
-) -> Vec<serde_json::Value> {
+) -> QueryStep {
     let mut stuff = HashMap::new();
 
     // add all the relevent `on` values to map,
     for left_row in &left_rows {
-        let left_object = left_row.as_object().unwrap();
-        let value = left_object.get(&left_on.name).unwrap();
+        let value = left_row.get_column(&left_on, left_schema).unwrap();
 
         stuff.insert(calculate_hash(value), vec![]);
     }
 
     // collect all the different right side values
     for right_row in right_rows {
-        let right_object = right_row.as_object().unwrap();
-        let value = right_object.get(&right_on.name).unwrap();
+        let value = right_row.get_column(&right_on, right_schema).unwrap();
 
         // this assumes left join and ignores where there's no left match
         if let Some(items) = stuff.get_mut(&calculate_hash(value)) {
-            items.push(right_object.clone());
+            items.push(right_row.clone());
         }
     }
 
     let mut output_rows = vec![];
 
     for left_row in left_rows {
-        let left_object = left_row.as_object().unwrap();
-        let hash = calculate_hash(left_object.get(&left_on.name).unwrap());
+        let hash = calculate_hash(left_row.get_column(&left_on, left_schema).unwrap());
 
         if let Some(rhs) = stuff.get(&hash) {
             if rhs.is_empty() {
                 // if left outer join
                 if let JoinType::LeftOuter = join_type {
-                    let whole_row = left_object.clone();
-                    output_rows.push(serde_json::Value::Object(whole_row));
+                    let whole_row = left_row.clone();
+                    output_rows.push(whole_row);
                 }
             } else {
                 for item in rhs {
-                    let mut whole_row = left_object.clone();
+                    let mut whole_row = left_row.clone();
                     whole_row.extend(item.clone());
-                    output_rows.push(serde_json::Value::Object(whole_row));
+                    output_rows.push(whole_row);
                 }
             }
         }
     }
 
-    output_rows
+    let mut schema = left_schema.clone();
+    schema.extend(right_schema.clone());
+
+    QueryStep {
+        rows: output_rows,
+        schema,
+    }
 }
 
 fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> bool {

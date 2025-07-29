@@ -77,7 +77,7 @@ pub enum Query {
     Project(Project),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Row {
     pub items: Vec<serde_json::Value>,
 }
@@ -88,9 +88,13 @@ impl Row {
 
         self.items.get(index)
     }
+
+    pub fn extend(&mut self, row: Row) {
+        self.items.extend(row.items)
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Schema {
     pub columns: Vec<Column>,
 }
@@ -102,6 +106,10 @@ impl Schema {
             .enumerate()
             .find(|(_, column_name)| column_name == &column)
             .map(|(i, _)| i)
+    }
+
+    pub fn extend(&mut self, schema: Schema) {
+        self.columns.extend(schema.columns)
     }
 }
 
@@ -117,6 +125,9 @@ impl QueryStep {
         for row in self.rows {
             let mut output_row = serde_json::Map::new();
             for column in &self.schema.columns {
+                dbg!(&self.schema);
+                dbg!(&column);
+                dbg!(&row);
                 let value = row.get_column(&column, &self.schema).unwrap();
                 output_row.insert(column.to_string(), value.clone());
             }
