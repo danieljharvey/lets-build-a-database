@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
+use types::QueryStep;
 use types::Row;
 use types::Schema;
 use types::{Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableName};
@@ -39,7 +40,7 @@ fn schema(table_name: &TableName) -> Vec<Column> {
 }
 
 // scan of static values for now
-fn table_scan(table_name: &TableName) -> (Schema, Vec<Row>) {
+fn table_scan(table_name: &TableName) -> QueryStep {
     let columns = schema(table_name);
 
     let raw = match table_name.0.as_str() {
@@ -68,7 +69,10 @@ fn table_scan(table_name: &TableName) -> (Schema, Vec<Row>) {
 
     let rows = raw.into_iter().map(|raw| into_row(raw, &columns)).collect();
 
-    (Schema { columns }, rows)
+    QueryStep {
+        schema: Schema { columns },
+        rows,
+    }
 }
 
 fn into_row(value: serde_json::Value, columns: &Vec<Column>) -> Row {
@@ -90,28 +94,28 @@ fn into_row(value: serde_json::Value, columns: &Vec<Column>) -> Row {
     Row { items }
 }
 
-pub fn run_query(query: &Query) -> (Schema, Vec<Row>) {
+pub fn run_query(query: &Query) -> QueryStep {
     match query {
         Query::From(From { table_name }) => table_scan(table_name),
         Query::Filter(Filter { from, filter }) => {
-            let (schema, rows) = run_query(from);
+            let QueryStep { schema, rows } = run_query(from);
             let rows = rows
                 .into_iter()
                 .filter(|row| apply_predicate(row, &schema, filter))
                 .collect();
 
-            (schema, rows)
+            QueryStep { schema, rows }
         }
         Query::Project(Project { from, fields }) => {
-            let (schema, rows) = run_query(from);
+            let QueryStep { schema, rows } = run_query(from);
 
             // TODO, we'll probably want to change the schema here
-            (
-                schema,
-                rows.into_iter()
-                    .map(|row| project_fields(row, fields))
-                    .collect(),
-            )
+            let rows = rows
+                .into_iter()
+                .map(|row| project_fields(row, &schema, fields))
+                .collect();
+
+            QueryStep { schema, rows }
         }
         Query::Join(Join {
             left_from,
@@ -120,8 +124,14 @@ pub fn run_query(query: &Query) -> (Schema, Vec<Row>) {
             right_column_on,
             join_type,
         }) => {
-            let (left_schema, left_rows) = run_query(left_from);
-            let (right_schema, right_rows) = run_query(right_from);
+            let QueryStep {
+                schema: left_schema,
+                rows: left_rows,
+            } = run_query(left_from);
+            let QueryStep {
+                schema: right_schema,
+                rows: right_rows,
+            } = run_query(right_from);
 
             todo!("join");
             /*
@@ -213,17 +223,15 @@ fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> bool {
 }
 
 // filter columns out of a row
-fn project_fields(row: Row, fields: &[Column]) -> Row {
-    let field_set: BTreeSet<_> = fields.iter().map(|c| c.name.clone()).collect();
-    if let serde_json::Value::Object(map) = row {
-        let new_map = map
-            .into_iter()
-            .filter(|(k, _)| field_set.contains(k))
-            .collect();
-        serde_json::Value::Object(new_map)
-    } else {
-        row
+fn project_fields(row: Row, schema: &Schema, fields: &[Column]) -> Row {
+    let mut items = vec![];
+
+    for field in fields {
+        let item = row.get_column(field, schema).unwrap();
+        items.push(item.clone());
     }
+
+    Row { items }
 }
 
 #[cfg(test)]
@@ -234,21 +242,21 @@ mod tests {
     fn test_query_select_animals() {
         let query = parse("SELECT * FROM animal").unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
     fn test_query_select_horse() {
         let query = parse("select * from animal where animal_name = 'horse'").unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
     fn test_query_projection() {
         let query = parse("select animal_name from animal where animal_name = 'horse'").unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
@@ -262,7 +270,7 @@ mod tests {
         )
         .unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
@@ -277,7 +285,7 @@ mod tests {
         )
         .unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
@@ -292,7 +300,7 @@ mod tests {
         )
         .unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
@@ -305,7 +313,7 @@ mod tests {
         )
         .unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 
     #[test]
@@ -320,6 +328,6 @@ mod tests {
         )
         .unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query));
+        insta::assert_json_snapshot!(run_query(&query).to_json());
     }
 }

@@ -5,6 +5,12 @@ pub struct Column {
     pub name: String,
 }
 
+impl Column {
+    fn to_string(&self) -> String {
+        self.name.to_string()
+    }
+}
+
 impl std::convert::From<&str> for Column {
     fn from(name: &str) -> Column {
         Column {
@@ -96,5 +102,26 @@ impl Schema {
             .enumerate()
             .find(|(_, column_name)| column_name == &column)
             .map(|(i, _)| i)
+    }
+}
+
+pub struct QueryStep {
+    pub schema: Schema,
+    pub rows: Vec<Row>,
+}
+
+impl QueryStep {
+    // reconstruct JSON output
+    pub fn to_json(self) -> serde_json::Value {
+        let mut output_rows = vec![];
+        for row in self.rows {
+            let mut output_row = serde_json::Map::new();
+            for column in &self.schema.columns {
+                let value = row.get_column(&column, &self.schema).unwrap();
+                output_row.insert(column.to_string(), value.clone());
+            }
+            output_rows.push(serde_json::Value::Object(output_row));
+        }
+        serde_json::Value::Array(output_rows)
     }
 }
