@@ -23,13 +23,12 @@ fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
             .collect(),
         "Album" => {
             let my_str = include_str!("../static/Album.json");
-            serde_json::from_str::<serde_json::Value>(my_str).unwrap().as_array().unwrap().clone()
+            serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
         },
         "Artist" => {
             let my_str = include_str!("../static/Artist.json");
-            serde_json::from_str::<serde_json::Value>(my_str).unwrap().as_array().unwrap().clone()
+            serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
         }
-
         _ => todo!("table not found {table_name:?}"),
     }
 }
