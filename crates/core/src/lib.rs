@@ -8,9 +8,7 @@ use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use types::{
-    Column, Expr, Filter, From, Join, JoinType, Op, Project, ProjectFields, Query, TableName,
-};
+use types::{Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableName};
 
 // scan of static values for now
 fn table_scan(table_name: &TableName) -> Vec<serde_json::Value> {
@@ -43,17 +41,10 @@ pub fn run_query(query: &Query) -> Vec<serde_json::Value> {
             .into_iter()
             .filter(|row| apply_predicate(row, filter))
             .collect(),
-        Query::Project(Project { from, fields }) => {
-            let inner = run_query(from);
-
-            match fields {
-                ProjectFields::Star => inner,
-                ProjectFields::Fields(fields) => inner
-                    .into_iter()
-                    .map(|row| project_fields(row, fields))
-                    .collect(),
-            }
-        }
+        Query::Project(Project { from, fields }) => run_query(from)
+            .into_iter()
+            .map(|row| project_fields(row, fields))
+            .collect(),
         Query::Join(Join {
             left_from,
             right_from,
