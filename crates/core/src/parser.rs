@@ -2,7 +2,9 @@ use sqlparser::ast::{self};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
-use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableName};
+use crate::types::{
+    Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableAlias, TableName,
+};
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -27,7 +29,9 @@ pub enum ParseError {
     GroupByNotSupported,
     SortByNotSupported,
     ExpectedIdent,
+    ExpectedTwoIdents,
     UnsupportedProjectionField,
+    TableAliasColumnsNotSupported,
     Join(JoinParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
@@ -198,7 +202,20 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
     match expr {
         ast::Expr::Identifier(ident) => Ok(Column {
             name: ident.value.to_string(),
+            table_alias: None,
         }),
+        ast::Expr::CompoundIdentifier(idents) => {
+            if let (Some(table_alias), Some(column), None) =
+                (idents.get(0), idents.get(1), idents.get(2))
+            {
+                Ok(Column {
+                    name: column.to_string(),
+                    table_alias: Some(TableAlias(table_alias.to_string())),
+                })
+            } else {
+                Err(ParseError::ExpectedTwoIdents)
+            }
+        }
         _ => Err(ParseError::ExpectedIdent),
     }
 }
@@ -253,10 +270,18 @@ fn from_from(froms: &[ast::TableWithJoins]) -> Result<Query, ParseError> {
     }
 }
 
+fn from_table_alias(table_alias: &ast::TableAlias) -> Result<TableAlias, ParseError> {
+    if !table_alias.columns.is_empty() {
+        Err(ParseError::TableAliasColumnsNotSupported)
+    } else {
+        Ok(TableAlias(table_alias.name.value.clone()))
+    }
+}
+
 fn from_relation(table: &ast::TableFactor) -> Result<From, ParseError> {
     if let ast::TableFactor::Table {
         name,
-        alias: _,
+        alias,
         args: _,
         with_hints: _,
         version: _,
@@ -268,7 +293,13 @@ fn from_relation(table: &ast::TableFactor) -> Result<From, ParseError> {
     } = table
     {
         let table_name = table_name_from_object_name(name)?;
-        Ok(From { table_name })
+
+        let table_alias = alias.as_ref().map(|a| from_table_alias(a)).transpose()?;
+
+        Ok(From {
+            table_name,
+            table_alias,
+        })
     } else {
         Err(ParseError::TableOnlyInFrom)
     }
@@ -278,6 +309,11 @@ fn from_join(join: &ast::Join, query: Query) -> Result<Query, ParseError> {
     let from = from_relation(&join.relation)?;
 
     let (join_type, left_column_on, right_column_on) = from_join_operator(&join.join_operator)?;
+
+    let right_column_on = Column {
+        table_alias: from.table_alias.clone(),
+        ..right_column_on
+    };
 
     let join = Join {
         join_type,
@@ -350,6 +386,7 @@ mod tests {
     fn test_parse_basic_select() {
         let expected = Query::From(From {
             table_name: TableName("albums".into()),
+            table_alias: None,
         });
 
         let result = parse("SELECT * FROM albums").unwrap();
@@ -362,10 +399,12 @@ mod tests {
         let expected = Query::Filter(Filter {
             from: Box::new(Query::From(From {
                 table_name: TableName("albums".into()),
+                table_alias: None,
             })),
             filter: Expr::ColumnComparison {
                 column: Column {
                     name: "album_id".to_string(),
+                    table_alias: None,
                 },
                 op: Op::Equals,
                 literal: 1.into(),
@@ -384,20 +423,25 @@ mod tests {
                 join_type: JoinType::Inner,
                 left_from: Box::new(Query::From(From {
                     table_name: TableName("species".to_string()),
+                    table_alias: None,
                 })),
                 right_from: Box::new(Query::From(From {
                     table_name: TableName("animal".to_string()),
+                    table_alias: None,
                 })),
                 left_column_on: Column {
                     name: "species_id".to_string(),
+                    table_alias: None,
                 },
                 right_column_on: Column {
                     name: "species_id".to_string(),
+                    table_alias: None,
                 },
             })),
             filter: Expr::ColumnComparison {
                 column: Column {
                     name: "species_id".to_string(),
+                    table_alias: None,
                 },
                 op: Op::Equals,
                 literal: 3.into(),

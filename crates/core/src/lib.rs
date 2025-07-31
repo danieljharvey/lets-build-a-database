@@ -10,6 +10,7 @@ use std::hash::Hasher;
 use types::QueryStep;
 use types::Row;
 use types::Schema;
+use types::TableAlias;
 use types::{Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableName};
 
 // hard coded vec of column names for now
@@ -39,8 +40,14 @@ fn schema(table_name: &TableName) -> Vec<Column> {
 }
 
 // scan of static values for now
-fn table_scan(table_name: &TableName) -> QueryStep {
-    let columns = schema(table_name);
+fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> QueryStep {
+    let columns = schema(table_name)
+        .into_iter()
+        .map(|column| Column {
+            table_alias: table_alias.cloned(),
+            ..column
+        })
+        .collect();
 
     let raw = match table_name.0.as_str() {
         "animal" => [(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
@@ -95,7 +102,10 @@ fn into_row(value: serde_json::Value, columns: &Vec<Column>) -> Row {
 
 pub fn run_query(query: &Query) -> QueryStep {
     match query {
-        Query::From(From { table_name }) => table_scan(table_name),
+        Query::From(From {
+            table_name,
+            table_alias,
+        }) => table_scan(table_name, table_alias.as_ref()),
         Query::Filter(Filter { from, filter }) => {
             let QueryStep { schema, rows } = run_query(from);
             let rows = rows
@@ -344,6 +354,22 @@ mod tests {
             r#"
         select * from Album 
           join Artist on ArtistId
+        where
+          ArtistId = 82
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).to_json());
+    }
+
+    #[test]
+    fn test_select_track_album_and_artist() {
+        let query = parse(
+            r#"
+        select Name, Title, artist.Name from Track
+          join Album on AlbumId
+          join Artist as artist on ArtistId
         where
           ArtistId = 82
     "#,

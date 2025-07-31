@@ -3,11 +3,19 @@ use std::{fmt::Display, hash::Hash};
 #[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
 pub struct Column {
     pub name: String,
+    pub table_alias: Option<TableAlias>,
 }
 
 impl Display for Column {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", self.name)
+        match &self.table_alias {
+            Some(table_alias) => {
+                write!(f, "{}.{}", table_alias, self.name)
+            }
+            None => {
+                write!(f, "{}", self.name)
+            }
+        }
     }
 }
 
@@ -15,6 +23,7 @@ impl std::convert::From<&str> for Column {
     fn from(name: &str) -> Column {
         Column {
             name: name.to_string(),
+            table_alias: None,
         }
     }
 }
@@ -46,9 +55,19 @@ pub struct Join {
 #[derive(Debug, PartialEq)]
 pub struct TableName(pub String);
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct TableAlias(pub String);
+
+impl Display for TableAlias {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct From {
     pub table_name: TableName,
+    pub table_alias: Option<TableAlias>,
 }
 
 #[derive(Debug, PartialEq)]
