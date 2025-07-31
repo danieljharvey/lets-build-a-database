@@ -1,9 +1,11 @@
 ---
 source: crates/core/src/lib.rs
-expression: run_query(&query)
+expression: run_query(&query).to_json()
 ---
 [
   {
+    "animal_id": null,
+    "animal_name": null,
     "species_id": 3,
     "species_name": "bird"
   }

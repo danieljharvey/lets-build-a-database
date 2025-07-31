@@ -13,9 +13,7 @@ fn main() {
     let args = Args::parse();
 
     let query = parse(&args.sql).unwrap();
-    let results = run_query(&query);
+    let result = run_query(&query);
 
-    for result in results {
-        println!("{result}");
-    }
+    println!("{}", result.to_json());
 }
