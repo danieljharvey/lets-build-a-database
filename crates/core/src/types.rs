@@ -1,13 +1,13 @@
-use std::hash::Hash;
+use std::{fmt::Display, hash::Hash};
 
 #[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
 pub struct Column {
     pub name: String,
 }
 
-impl Column {
-    fn to_string(&self) -> String {
-        self.name.to_string()
+impl Display for Column {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.name)
     }
 }
 
@@ -90,7 +90,7 @@ impl Row {
     }
 
     pub fn extend(&mut self, row: Row) {
-        self.items.extend(row.items)
+        self.items.extend(row.items);
     }
 }
 
@@ -109,7 +109,7 @@ impl Schema {
     }
 
     pub fn extend(&mut self, schema: Schema) {
-        self.columns.extend(schema.columns)
+        self.columns.extend(schema.columns);
     }
 }
 
@@ -120,15 +120,13 @@ pub struct QueryStep {
 
 impl QueryStep {
     // reconstruct JSON output
-    pub fn to_json(self) -> serde_json::Value {
+    pub fn to_json(&self) -> serde_json::Value {
         let mut output_rows = vec![];
-        for row in self.rows {
+
+        for row in &self.rows {
             let mut output_row = serde_json::Map::new();
             for column in &self.schema.columns {
-                dbg!(&self.schema);
-                dbg!(&column);
-                dbg!(&row);
-                let value = row.get_column(&column, &self.schema).unwrap();
+                let value = row.get_column(column, &self.schema).unwrap();
                 output_row.insert(column.to_string(), value.clone());
             }
             output_rows.push(serde_json::Value::Object(output_row));

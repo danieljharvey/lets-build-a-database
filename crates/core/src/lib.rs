@@ -87,7 +87,7 @@ fn into_row(value: serde_json::Value, columns: &Vec<Column>) -> Row {
             panic!("could not find {}", column.name);
         };
 
-        items.push(item)
+        items.push(item);
     }
 
     Row { items }
@@ -108,11 +108,12 @@ pub fn run_query(query: &Query) -> QueryStep {
         Query::Project(Project { from, fields }) => {
             let QueryStep { schema, rows } = run_query(from);
 
-            // TODO, we'll probably want to change the schema here
             let rows = rows
                 .into_iter()
-                .map(|row| project_fields(row, &schema, fields))
+                .map(|row| project_fields(&row, &schema, fields))
                 .collect();
+
+            let schema = project_schema(&schema, fields);
 
             QueryStep { schema, rows }
         }
@@ -164,14 +165,14 @@ fn hash_join(
 
     // add all the relevent `on` values to map,
     for left_row in &left_rows {
-        let value = left_row.get_column(&left_on, left_schema).unwrap();
+        let value = left_row.get_column(left_on, left_schema).unwrap();
 
         stuff.insert(calculate_hash(value), vec![]);
     }
 
     // collect all the different right side values
     for right_row in right_rows {
-        let value = right_row.get_column(&right_on, right_schema).unwrap();
+        let value = right_row.get_column(right_on, right_schema).unwrap();
 
         // this assumes left join and ignores where there's no left match
         if let Some(items) = stuff.get_mut(&calculate_hash(value)) {
@@ -182,13 +183,18 @@ fn hash_join(
     let mut output_rows = vec![];
 
     for left_row in left_rows {
-        let hash = calculate_hash(left_row.get_column(&left_on, left_schema).unwrap());
+        let hash = calculate_hash(left_row.get_column(left_on, left_schema).unwrap());
 
         if let Some(rhs) = stuff.get(&hash) {
             if rhs.is_empty() {
                 // if left outer join
                 if let JoinType::LeftOuter = join_type {
-                    let whole_row = left_row.clone();
+                    let mut whole_row = left_row.clone();
+
+                    // we can't find value, so add a bunch of nulls
+                    for _ in &right_schema.columns {
+                        whole_row.items.push(serde_json::Value::Null);
+                    }
                     output_rows.push(whole_row);
                 }
             } else {
@@ -217,7 +223,7 @@ fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> bool {
             op,
             literal,
         } => {
-            let value = row.get_column(&column, schema).unwrap();
+            let value = row.get_column(column, schema).unwrap();
 
             match op {
                 Op::Equals => value == literal,
@@ -226,8 +232,20 @@ fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> bool {
     }
 }
 
+fn project_schema(schema: &Schema, fields: &[Column]) -> Schema {
+    let mut columns = vec![];
+
+    for field in fields {
+        let index = schema.get_index_for_column(field).unwrap();
+        let column = schema.columns.get(index).unwrap();
+        columns.push(column.clone());
+    }
+
+    Schema { columns }
+}
+
 // filter columns out of a row
-fn project_fields(row: Row, schema: &Schema, fields: &[Column]) -> Row {
+fn project_fields(row: &Row, schema: &Schema, fields: &[Column]) -> Row {
     let mut items = vec![];
 
     for field in fields {
