@@ -1,0 +1,266 @@
+---
+source: crates/core/src/lib.rs
+expression: run_query(&query).to_json()
+---
+[
+  {
+    "Name": "Collision",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Stripsearch",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Last Cup Of Sorrow",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Naked In Front Of The Computer",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Helpless",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Mouth To Mouth",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Ashes To Ashes",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "She Loves Me Not",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Got That Feeling",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Paths Of Glory",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Home Sick Home",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Pristina",
+    "Title": "Album Of The Year",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Land Of Sunshine",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Caffeine",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Midlife Crisis",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "RV",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Smaller And Smaller",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Everything's Ruined",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Malpractice",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Kindergarten",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Be Aggressive",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "A Small Victory",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Crack Hitler",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Jizzlobber",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Midnight Cowboy",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Easy",
+    "Title": "Angel Dust",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Get Out",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Ricochet",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Evidence",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "The Gentle Art Of Making Enemies",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Star A.D.",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Cuckoo For Caca",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Caralho Voador",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Ugly In The Morning",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Digging The Grave",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Take This Bottle",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "King For A Day",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "What A Day",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "The Last To Know",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Just A Man",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Absolute Zero",
+    "Title": "King For A Day Fool For A Lifetime",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "From Out Of Nowhere",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Epic",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Falling To Pieces",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Surprise! You're Dead!",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Zombie Eaters",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "The Real Thing",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Underwater Love",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "The Morning After",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Woodpecker From Mars",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "War Pigs",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  },
+  {
+    "Name": "Edge Of The World",
+    "Title": "The Real Thing",
+    "artist.Name": "Faith No More"
+  }
+]
