@@ -1,9 +1,9 @@
-use sqlparser::ast::{self};
+use sqlparser::ast::{self, LimitClause};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
 use crate::types::{
-    Column, Expr, Filter, From, Join, JoinType, Op, Project, Query, TableAlias, TableName,
+    Column, Expr, Filter, From, Join, JoinType, Limit, Op, Project, Query, TableAlias, TableName,
 };
 
 #[derive(Debug)]
@@ -11,8 +11,11 @@ pub enum ParseError {
     NoStatements,
     OnlyQueryIsSupported,
     WithNotSupported,
+    OffsetNotSupported,
+    OffsetCommaLimitNotSupported,
+    LimitByNotSupported,
+    LimitMustBeInt,
     OrderByNotSupported,
-    LimitClauseNotSupported,
     FetchNotSupported,
     LocksNotSupported,
     ForClauseNotSupported,
@@ -91,10 +94,6 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
         return Err(ParseError::OrderByNotSupported);
     }
 
-    if limit_clause.is_some() {
-        return Err(ParseError::LimitClauseNotSupported);
-    }
-
     if fetch.is_some() {
         return Err(ParseError::FetchNotSupported);
     }
@@ -119,7 +118,48 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
         return Err(ParseError::PipeOperatorsNotSupported);
     }
 
-    from_body(body)
+    let mut query = from_body(body)?;
+
+    if let Some(limit) = limit_clause {
+        query = Query::Limit(Limit {
+            from: Box::new(query),
+            limit: from_limit(limit)?,
+        });
+    }
+
+    Ok(query)
+}
+
+fn from_limit(limit: &ast::LimitClause) -> Result<u64, ParseError> {
+    match limit {
+        LimitClause::OffsetCommaLimit { .. } => Err(ParseError::OffsetCommaLimitNotSupported),
+        LimitClause::LimitOffset {
+            limit,
+            offset,
+            limit_by,
+        } => {
+            if offset.is_some() {
+                return Err(ParseError::OffsetNotSupported);
+            }
+
+            if !limit_by.is_empty() {
+                return Err(ParseError::LimitByNotSupported);
+            }
+
+            if let Some(limit) = limit {
+                let value = value_from_selection(&limit)?;
+
+                match value {
+                    serde_json::Value::Number(a) => {
+                        a.as_u64().ok_or_else(|| ParseError::LimitMustBeInt)
+                    }
+                    _ => Err(ParseError::LimitMustBeInt),
+                }
+            } else {
+                Err(ParseError::LimitMustBeInt)
+            }
+        }
+    }
 }
 
 fn from_body(body: &ast::SetExpr) -> Result<Query, ParseError> {

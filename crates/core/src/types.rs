@@ -93,11 +93,18 @@ pub enum JoinType {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Limit {
+    pub from: Box<Query>,
+    pub limit: u64,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Query {
     From(From),
     Filter(Filter),
     Join(Join),
     Project(Project),
+    Limit(Limit),
 }
 
 #[derive(Debug, PartialEq, Clone)]

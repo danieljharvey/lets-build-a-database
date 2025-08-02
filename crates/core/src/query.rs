@@ -3,6 +3,8 @@ mod from;
 mod join;
 mod project;
 
+use crate::types::Limit;
+
 use super::types::QueryStep;
 use super::types::{Column, Filter, From, Join, Project, Query};
 
@@ -50,6 +52,14 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 schema,
                 rows: projected_rows,
             })
+        }
+        Query::Limit(Limit { limit, from }) => {
+            let QueryStep { schema, mut rows } = run_query(from)?;
+            let size: usize = (*limit).try_into().unwrap();
+
+            rows.truncate(size);
+
+            Ok(QueryStep { schema, rows })
         }
         Query::Join(Join {
             left_from,
@@ -186,6 +196,7 @@ mod tests {
           join Artist as artist on ArtistId
         where
           ArtistId = 82
+        limit 10
     "#,
         )
         .unwrap();
