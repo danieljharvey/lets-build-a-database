@@ -1,0 +1,194 @@
+mod filter;
+mod from;
+mod join;
+mod project;
+
+use super::types::QueryStep;
+use super::types::{Column, Filter, From, Join, Project, Query};
+
+#[derive(Debug)]
+pub enum QueryError {
+    ColumnNotFoundInSchema { column_name: Column },
+    IndexNotFoundInSchema { index: usize },
+}
+
+pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
+    match query {
+        Query::From(From {
+            table_name,
+            table_alias,
+        }) => Ok(from::table_scan(table_name, table_alias.as_ref())),
+        Query::Filter(Filter { from, filter }) => {
+            let QueryStep { schema, rows } = run_query(from)?;
+
+            let mut filtered_rows = vec![];
+
+            for row in rows {
+                if filter::apply_predicate(&row, &schema, filter)? {
+                    filtered_rows.push(row);
+                }
+            }
+
+            Ok(QueryStep {
+                schema,
+                rows: filtered_rows,
+            })
+        }
+        Query::Project(Project { from, fields }) => {
+            let QueryStep { schema, rows } = run_query(from)?;
+
+            let mut projected_rows = vec![];
+
+            for row in &rows {
+                projected_rows.push(project::project_fields(row, &schema, fields)?);
+            }
+
+            let schema = project::project_schema(&schema, fields)?;
+
+            Ok(QueryStep {
+                schema,
+                rows: projected_rows,
+            })
+        }
+        Query::Join(Join {
+            left_from,
+            right_from,
+            left_column_on,
+            right_column_on,
+            join_type,
+        }) => {
+            let QueryStep {
+                schema: left_schema,
+                rows: left_rows,
+            } = run_query(left_from)?;
+            let QueryStep {
+                schema: right_schema,
+                rows: right_rows,
+            } = run_query(right_from)?;
+
+            join::hash_join(
+                left_rows,
+                &left_schema,
+                right_rows,
+                &right_schema,
+                left_column_on,
+                right_column_on,
+                join_type,
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parser::parse, run_query};
+
+    #[test]
+    fn test_query_select_animals() {
+        let query = parse("SELECT * FROM animal").unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_query_select_horse() {
+        let query = parse("select * from animal where animal_name = 'horse'").unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_query_projection() {
+        let query = parse("select animal_name from animal where animal_name = 'horse'").unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_select_horse_and_species() {
+        let query = parse(
+            r#"
+        select * from animal 
+        join species 
+            on species_id 
+        where animal_name = 'horse'"#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_select_species_and_animals() {
+        let query = parse(
+            r#"
+        select * from species 
+          join animal on species_id
+        where
+          species_id = 3 
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_select_species_and_animals_left_outer() {
+        let query = parse(
+            r#"
+        select * from species 
+          left outer join animal on species_id
+        where
+          species_id = 3 
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_select_album() {
+        let query = parse(
+            r#"
+        select * from Album 
+        where Title = 'Jagged Little Pill'
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_select_album_and_artist() {
+        let query = parse(
+            r#"
+        select * from Album 
+          join Artist on ArtistId
+        where
+          ArtistId = 82
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+
+    #[test]
+    fn test_select_track_album_and_artist() {
+        let query = parse(
+            r#"
+        select Name, Title, artist.Name from Track
+          join Album on AlbumId
+          join Artist as artist on ArtistId
+        where
+          ArtistId = 82
+    "#,
+        )
+        .unwrap();
+
+        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+    }
+}

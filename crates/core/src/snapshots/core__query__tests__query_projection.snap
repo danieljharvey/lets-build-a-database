@@ -1,0 +1,9 @@
+---
+source: crates/core/src/query.rs
+expression: run_query(&query).unwrap().to_json()
+---
+[
+  {
+    "animal_name": "horse"
+  }
+]

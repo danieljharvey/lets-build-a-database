@@ -13,7 +13,12 @@ fn main() {
     let args = Args::parse();
 
     let query = parse(&args.sql).unwrap();
-    let result = run_query(&query);
-
-    println!("{}", result.to_json());
+    match run_query(&query) {
+        Ok(result) => {
+            println!("{}", result.to_json());
+        }
+        Err(err) => {
+            println!("{err:?}",);
+        }
+    }
 }
