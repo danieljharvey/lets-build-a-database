@@ -223,6 +223,10 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
 fn from_binary_operator(op: &ast::BinaryOperator) -> Result<Op, ParseError> {
     match op {
         ast::BinaryOperator::Eq => Ok(Op::Equals),
+        ast::BinaryOperator::Gt => Ok(Op::GreaterThan),
+        ast::BinaryOperator::GtEq => Ok(Op::GreaterThanOrEqual),
+        ast::BinaryOperator::Lt => Ok(Op::LessThan),
+        ast::BinaryOperator::LtEq => Ok(Op::LessThanOrEqual),
         _ => Err(ParseError::UnknownBinaryOperator),
     }
 }

@@ -10,6 +10,7 @@ use super::types::{Column, Filter, From, Join, Project, Query};
 pub enum QueryError {
     ColumnNotFoundInSchema { column_name: Column },
     IndexNotFoundInSchema { index: usize },
+    FilterError(filter::FilterError),
 }
 
 pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
@@ -125,7 +126,7 @@ mod tests {
         select * from species 
           join animal on species_id
         where
-          species_id = 3 
+          species_id >= 3 
     "#,
         )
         .unwrap();
