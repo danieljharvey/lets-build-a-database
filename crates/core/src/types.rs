@@ -40,6 +40,10 @@ pub enum Expr {
 #[derive(Debug, PartialEq)]
 pub enum Op {
     Equals,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
 }
 
 #[derive(Debug, PartialEq)]
