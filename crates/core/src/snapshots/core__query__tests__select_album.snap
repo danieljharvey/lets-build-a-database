@@ -1,6 +1,6 @@
 ---
-source: crates/core/src/lib.rs
-expression: run_query(&query)
+source: crates/core/src/query.rs
+expression: run_query(&query).unwrap().to_json()
 ---
 [
   {

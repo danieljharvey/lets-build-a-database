@@ -206,7 +206,7 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
         }),
         ast::Expr::CompoundIdentifier(idents) => {
             if let (Some(table_alias), Some(column), None) =
-                (idents.get(0), idents.get(1), idents.get(2))
+                (idents.first(), idents.get(1), idents.get(2))
             {
                 Ok(Column {
                     name: column.to_string(),
@@ -271,10 +271,10 @@ fn from_from(froms: &[ast::TableWithJoins]) -> Result<Query, ParseError> {
 }
 
 fn from_table_alias(table_alias: &ast::TableAlias) -> Result<TableAlias, ParseError> {
-    if !table_alias.columns.is_empty() {
-        Err(ParseError::TableAliasColumnsNotSupported)
-    } else {
+    if table_alias.columns.is_empty() {
         Ok(TableAlias(table_alias.name.value.clone()))
+    } else {
+        Err(ParseError::TableAliasColumnsNotSupported)
     }
 }
 
@@ -294,7 +294,7 @@ fn from_relation(table: &ast::TableFactor) -> Result<From, ParseError> {
     {
         let table_name = table_name_from_object_name(name)?;
 
-        let table_alias = alias.as_ref().map(|a| from_table_alias(a)).transpose()?;
+        let table_alias = alias.as_ref().map(from_table_alias).transpose()?;
 
         Ok(From {
             table_name,
