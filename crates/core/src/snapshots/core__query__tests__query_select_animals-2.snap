@@ -3,5 +3,5 @@ source: crates/core/src/query.rs
 expression: result.cost
 ---
 Cost {
-    rows_processed: 0,
+    rows_processed: 3,
 }

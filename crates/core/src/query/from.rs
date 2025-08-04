@@ -66,12 +66,20 @@ pub fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> Q
         _ => todo!("table not found {table_name:?}"),
     };
 
-    let rows = raw.into_iter().map(|raw| into_row(raw, &columns)).collect();
+    let mut cost = Cost::new();
+
+    let rows = raw
+        .into_iter()
+        .map(|raw| {
+            cost.increment_rows_processed();
+            into_row(raw, &columns)
+        })
+        .collect();
 
     QueryStep {
         schema: Schema { columns },
         rows,
-        cost: Cost::new(),
+        cost,
     }
 }
 
