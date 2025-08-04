@@ -52,8 +52,13 @@ pub struct Join {
     pub join_type: JoinType,
     pub left_from: Box<Query>,
     pub right_from: Box<Query>,
-    pub left_column_on: Column,
-    pub right_column_on: Column,
+    pub on: JoinOn,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct JoinOn {
+    pub left: Column,
+    pub right: Column,
 }
 
 #[derive(Debug, PartialEq)]
@@ -146,6 +151,7 @@ impl Schema {
 pub struct QueryStep {
     pub schema: Schema,
     pub rows: Vec<Row>,
+    pub cost: Cost,
 }
 
 impl QueryStep {
@@ -162,5 +168,30 @@ impl QueryStep {
             output_rows.push(serde_json::Value::Object(output_row));
         }
         serde_json::Value::Array(output_rows)
+    }
+}
+
+#[derive(Debug)]
+pub struct Cost {
+    pub rows_processed: u64,
+}
+
+impl Default for Cost {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Cost {
+    pub fn new() -> Self {
+        Cost { rows_processed: 0 }
+    }
+
+    pub fn increment_rows_processed(&mut self) {
+        self.rows_processed += 1;
+    }
+
+    pub fn extend(&mut self, cost: &Cost) {
+        self.rows_processed += cost.rows_processed;
     }
 }

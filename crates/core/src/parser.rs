@@ -3,7 +3,8 @@ use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
 use crate::types::{
-    Column, Expr, Filter, From, Join, JoinType, Limit, Op, Project, Query, TableAlias, TableName,
+    Column, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Project, Query, TableAlias,
+    TableName,
 };
 
 #[derive(Debug)]
@@ -147,12 +148,10 @@ fn from_limit(limit: &ast::LimitClause) -> Result<u64, ParseError> {
             }
 
             if let Some(limit) = limit {
-                let value = value_from_selection(&limit)?;
+                let value = value_from_selection(limit)?;
 
                 match value {
-                    serde_json::Value::Number(a) => {
-                        a.as_u64().ok_or_else(|| ParseError::LimitMustBeInt)
-                    }
+                    serde_json::Value::Number(a) => a.as_u64().ok_or(ParseError::LimitMustBeInt),
                     _ => Err(ParseError::LimitMustBeInt),
                 }
             } else {
@@ -363,8 +362,10 @@ fn from_join(join: &ast::Join, query: Query) -> Result<Query, ParseError> {
         join_type,
         left_from: Box::new(query),
         right_from: Box::new(Query::From(from)),
-        left_column_on,
-        right_column_on,
+        on: JoinOn {
+            left: left_column_on,
+            right: right_column_on,
+        },
     };
 
     Ok(Query::Join(join))
@@ -422,7 +423,7 @@ fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{Column, Expr, Filter, From, Join, JoinType, Op, Query, TableName};
+    use crate::types::{Column, Expr, Filter, From, Join, JoinOn, JoinType, Op, Query, TableName};
 
     use super::parse;
 
@@ -473,13 +474,15 @@ mod tests {
                     table_name: TableName("animal".to_string()),
                     table_alias: None,
                 })),
-                left_column_on: Column {
-                    name: "species_id".to_string(),
-                    table_alias: None,
-                },
-                right_column_on: Column {
-                    name: "species_id".to_string(),
-                    table_alias: None,
+                on: JoinOn {
+                    left: Column {
+                        name: "species_id".to_string(),
+                        table_alias: None,
+                    },
+                    right: Column {
+                        name: "species_id".to_string(),
+                        table_alias: None,
+                    },
                 },
             })),
             filter: Expr::ColumnComparison {

@@ -22,11 +22,16 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
             table_alias,
         }) => Ok(from::table_scan(table_name, table_alias.as_ref())),
         Query::Filter(Filter { from, filter }) => {
-            let QueryStep { schema, rows } = run_query(from)?;
+            let QueryStep {
+                schema,
+                rows,
+                mut cost,
+            } = run_query(from)?;
 
             let mut filtered_rows = vec![];
 
             for row in rows {
+                cost.increment_rows_processed();
                 if filter::apply_predicate(&row, &schema, filter)? {
                     filtered_rows.push(row);
                 }
@@ -35,14 +40,20 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
             Ok(QueryStep {
                 schema,
                 rows: filtered_rows,
+                cost,
             })
         }
         Query::Project(Project { from, fields }) => {
-            let QueryStep { schema, rows } = run_query(from)?;
+            let QueryStep {
+                schema,
+                rows,
+                mut cost,
+            } = run_query(from)?;
 
             let mut projected_rows = vec![];
 
             for row in &rows {
+                cost.increment_rows_processed();
                 projected_rows.push(project::project_fields(row, &schema, fields)?);
             }
 
@@ -51,40 +62,49 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
             Ok(QueryStep {
                 schema,
                 rows: projected_rows,
+                cost,
             })
         }
         Query::Limit(Limit { limit, from }) => {
-            let QueryStep { schema, mut rows } = run_query(from)?;
+            let QueryStep {
+                schema,
+                mut rows,
+                cost,
+            } = run_query(from)?;
             let size: usize = (*limit).try_into().unwrap();
 
             rows.truncate(size);
 
-            Ok(QueryStep { schema, rows })
+            Ok(QueryStep { schema, rows, cost })
         }
         Query::Join(Join {
             left_from,
             right_from,
-            left_column_on,
-            right_column_on,
             join_type,
+            on,
         }) => {
             let QueryStep {
                 schema: left_schema,
                 rows: left_rows,
+                cost: mut left_cost,
             } = run_query(left_from)?;
+
             let QueryStep {
                 schema: right_schema,
                 rows: right_rows,
+                cost: right_cost,
             } = run_query(right_from)?;
+
+            left_cost.extend(&right_cost);
 
             join::hash_join(
                 left_rows,
                 &left_schema,
                 right_rows,
                 &right_schema,
-                left_column_on,
-                right_column_on,
+                on,
                 join_type,
+                left_cost,
             )
         }
     }
@@ -98,21 +118,28 @@ mod tests {
     fn test_query_select_animals() {
         let query = parse("SELECT * FROM animal").unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
     fn test_query_select_horse() {
         let query = parse("select * from animal where animal_name = 'horse'").unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
     fn test_query_projection() {
         let query = parse("select animal_name from animal where animal_name = 'horse'").unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
@@ -125,8 +152,10 @@ mod tests {
         where animal_name = 'horse'"#,
         )
         .unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
@@ -140,8 +169,10 @@ mod tests {
     "#,
         )
         .unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
@@ -155,8 +186,10 @@ mod tests {
     "#,
         )
         .unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
@@ -168,8 +201,10 @@ mod tests {
     "#,
         )
         .unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
@@ -183,8 +218,10 @@ mod tests {
     "#,
         )
         .unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 
     #[test]
@@ -200,7 +237,9 @@ mod tests {
     "#,
         )
         .unwrap();
+        let result = run_query(&query).unwrap();
 
-        insta::assert_json_snapshot!(run_query(&query).unwrap().to_json());
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
     }
 }

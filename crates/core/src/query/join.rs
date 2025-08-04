@@ -1,8 +1,10 @@
 use super::QueryError;
+use crate::types::Cost;
+use crate::types::JoinOn;
+use crate::types::JoinType;
 use crate::types::QueryStep;
 use crate::types::Row;
 use crate::types::Schema;
-use crate::types::{Column, JoinType};
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
@@ -13,17 +15,18 @@ pub fn hash_join(
     left_schema: &Schema,
     right_rows: Vec<Row>,
     right_schema: &Schema,
-    left_on: &Column,
-    right_on: &Column,
+    on: &JoinOn,
     join_type: &JoinType,
+    mut cost: Cost,
 ) -> Result<QueryStep, QueryError> {
     let mut stuff = HashMap::new();
 
     // add all the relevent `on` values to map,
     for left_row in &left_rows {
-        let value = left_row.get_column(left_on, left_schema).ok_or_else(|| {
+        cost.increment_rows_processed();
+        let value = left_row.get_column(&on.left, left_schema).ok_or_else(|| {
             QueryError::ColumnNotFoundInSchema {
-                column_name: left_on.clone(),
+                column_name: on.left.clone(),
             }
         })?;
 
@@ -32,10 +35,11 @@ pub fn hash_join(
 
     // collect all the different right side values
     for right_row in right_rows {
+        cost.increment_rows_processed();
         let value = right_row
-            .get_column(right_on, right_schema)
+            .get_column(&on.right, right_schema)
             .ok_or_else(|| QueryError::ColumnNotFoundInSchema {
-                column_name: right_on.clone(),
+                column_name: on.right.clone(),
             })?;
 
         // this assumes left join and ignores where there's no left match
@@ -47,9 +51,10 @@ pub fn hash_join(
     let mut output_rows = vec![];
 
     for left_row in left_rows {
-        let hash = calculate_hash(left_row.get_column(left_on, left_schema).ok_or_else(|| {
+        cost.increment_rows_processed();
+        let hash = calculate_hash(left_row.get_column(&on.left, left_schema).ok_or_else(|| {
             QueryError::ColumnNotFoundInSchema {
-                column_name: left_on.clone(),
+                column_name: on.left.clone(),
             }
         })?);
 
@@ -81,6 +86,7 @@ pub fn hash_join(
     Ok(QueryStep {
         rows: output_rows,
         schema,
+        cost,
     })
 }
 
