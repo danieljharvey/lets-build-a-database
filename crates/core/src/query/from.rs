@@ -1,3 +1,4 @@
+use crate::types::Cost;
 use crate::types::QueryStep;
 use crate::types::Row;
 use crate::types::Schema;
@@ -70,6 +71,7 @@ pub fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> Q
     QueryStep {
         schema: Schema { columns },
         rows,
+        cost: Cost::new(),
     }
 }
 
