@@ -1,8 +1,17 @@
 use std::{fmt::Display, hash::Hash};
 
 #[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
+pub struct ColumnName(pub String);
+
+impl Display for ColumnName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
 pub struct Column {
-    pub name: String,
+    pub name: ColumnName,
     pub table_alias: Option<TableAlias>,
 }
 
@@ -22,7 +31,7 @@ impl Display for Column {
 impl std::convert::From<&str> for Column {
     fn from(name: &str) -> Column {
         Column {
-            name: name.to_string(),
+            name: ColumnName(name.to_string()),
             table_alias: None,
         }
     }

@@ -32,6 +32,35 @@ fn schema(table_name: &TableName) -> Vec<Column> {
     }
 }
 
+fn split_to_rows(str: &str) -> Vec<serde_json::Value> {
+    str.lines()
+        .map(|row| serde_json::from_str::<serde_json::Value>(row).unwrap())
+        .collect()
+}
+
+fn raw_rows_for_table(table_name: &TableName) -> Vec<serde_json::Value> {
+    match table_name.0.as_str() {
+        "animal" => [(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
+            .iter()
+            .map(|(id, name, species)| json!({ "animal_id": id, "animal_name": name, "species_id": species }))
+            .collect(),
+        "species" => [(1, "mammal"), (2, "reptile"), (3, "bird")]
+            .iter()
+            .map(|(id, name)| json!({"species_id": id, "species_name": name}))
+            .collect(),
+        "Album" => {
+            split_to_rows(include_str!("../../static/Album.jsonl"))
+        },
+        "Artist" => {
+            split_to_rows(include_str!("../../static/Artist.jsonl"))
+        }
+        "Track" => {
+            split_to_rows(include_str!("../../static/Track.jsonl"))
+        }
+        _ => todo!("table not found {table_name:?}"),
+    }
+}
+
 // scan of static values for now
 pub fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> QueryStep {
     let columns = schema(table_name)
@@ -42,29 +71,7 @@ pub fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> Q
         })
         .collect();
 
-    let raw = match table_name.0.as_str() {
-        "animal" => [(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
-            .iter()
-            .map(|(id, name, species)| json!({ "animal_id": id, "animal_name": name, "species_id": species }))
-            .collect(),
-        "species" => [(1, "mammal"), (2, "reptile"), (3, "bird")]
-            .iter()
-            .map(|(id, name)| json!({"species_id": id, "species_name": name}))
-            .collect(),
-        "Album" => {
-            let my_str = include_str!("../../static/Album.json");
-            serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
-        },
-        "Artist" => {
-            let my_str = include_str!("../../static/Artist.json");
-            serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
-        }
-        "Track" => {
-            let my_str = include_str!("../../static/Track.json");
-            serde_json::from_str::<Vec<serde_json::Value>>(my_str).unwrap()
-        }
-        _ => todo!("table not found {table_name:?}"),
-    };
+    let raw = raw_rows_for_table(table_name);
 
     let mut cost = Cost::new();
 
@@ -92,7 +99,7 @@ fn into_row(value: serde_json::Value, columns: &Vec<Column>) -> Row {
 
     // collect items in order
     for column in columns {
-        let Some(item) = map.remove(&column.name) else {
+        let Some(item) = map.remove(&column.name.0) else {
             panic!("could not find {}", column.name);
         };
 

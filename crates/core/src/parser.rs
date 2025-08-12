@@ -3,8 +3,8 @@ use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
 use crate::types::{
-    Column, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Project, Query, TableAlias,
-    TableName,
+    Column, ColumnName, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Project, Query,
+    TableAlias, TableName,
 };
 
 #[derive(Debug)]
@@ -240,7 +240,7 @@ fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
 fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
     match expr {
         ast::Expr::Identifier(ident) => Ok(Column {
-            name: ident.value.to_string(),
+            name: ColumnName(ident.value.to_string()),
             table_alias: None,
         }),
         ast::Expr::CompoundIdentifier(idents) => {
@@ -248,7 +248,7 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
                 (idents.first(), idents.get(1), idents.get(2))
             {
                 Ok(Column {
-                    name: column.to_string(),
+                    name: ColumnName(column.to_string()),
                     table_alias: Some(TableAlias(table_alias.to_string())),
                 })
             } else {
@@ -447,10 +447,7 @@ mod tests {
                 table_alias: None,
             })),
             filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "album_id".to_string(),
-                    table_alias: None,
-                },
+                column: Column::from("album_id"),
                 op: Op::Equals,
                 literal: 1.into(),
             },
@@ -475,21 +472,12 @@ mod tests {
                     table_alias: None,
                 })),
                 on: JoinOn {
-                    left: Column {
-                        name: "species_id".to_string(),
-                        table_alias: None,
-                    },
-                    right: Column {
-                        name: "species_id".to_string(),
-                        table_alias: None,
-                    },
+                    left: Column::from("species_id"),
+                    right: Column::from("species_id"),
                 },
             })),
             filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "species_id".to_string(),
-                    table_alias: None,
-                },
+                column: Column::from("species_id"),
                 op: Op::Equals,
                 literal: 3.into(),
             },
