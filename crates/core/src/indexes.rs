@@ -12,9 +12,10 @@ pub struct LineNumber(pub usize);
 pub struct HashedValue(pub u64);
 
 // the index we want
+#[derive(Debug, PartialEq, Clone)]
 pub struct Index {
-    table_name: TableName,
-    columns: Vec<ColumnName>,
+    pub table_name: TableName,
+    pub columns: Vec<ColumnName>,
 }
 
 // the items

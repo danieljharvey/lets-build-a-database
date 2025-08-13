@@ -38,7 +38,7 @@ fn split_to_rows(str: &str) -> Vec<serde_json::Value> {
         .collect()
 }
 
-fn raw_rows_for_table(table_name: &TableName) -> Vec<serde_json::Value> {
+pub fn raw_rows_for_table(table_name: &TableName) -> Vec<serde_json::Value> {
     match table_name.0.as_str() {
         "animal" => [(1, "horse", 1), (2, "dog", 1), (3, "snake", 2)]
             .iter()
