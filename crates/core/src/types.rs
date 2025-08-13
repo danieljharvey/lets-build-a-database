@@ -1,8 +1,25 @@
 use std::{fmt::Display, hash::Hash};
 
+use crate::indexes::Index;
+
+#[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
+pub struct ColumnName(pub String);
+
+impl std::convert::From<&str> for ColumnName {
+    fn from(name: &str) -> Self {
+        ColumnName(name.to_string())
+    }
+}
+
+impl Display for ColumnName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Hash, Clone)]
 pub struct Column {
-    pub name: String,
+    pub name: ColumnName,
     pub table_alias: Option<TableAlias>,
 }
 
@@ -22,7 +39,7 @@ impl Display for Column {
 impl std::convert::From<&str> for Column {
     fn from(name: &str) -> Column {
         Column {
-            name: name.to_string(),
+            name: ColumnName(name.to_string()),
             table_alias: None,
         }
     }
@@ -47,11 +64,11 @@ pub enum Op {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Join {
+pub struct Join<Plan> {
     #[allow(clippy::struct_field_names)]
     pub join_type: JoinType,
-    pub left_from: Box<Query>,
-    pub right_from: Box<Query>,
+    pub left_from: Box<Plan>,
+    pub right_from: Box<Plan>,
     pub on: JoinOn,
 }
 
@@ -61,8 +78,14 @@ pub struct JoinOn {
     pub right: Column,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub struct TableName(pub String);
+
+impl std::convert::From<&str> for TableName {
+    fn from(name: &str) -> TableName {
+        TableName(name.to_string())
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct TableAlias(pub String);
@@ -80,14 +103,14 @@ pub struct From {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Filter {
-    pub from: Box<Query>,
+pub struct Filter<Plan> {
+    pub from: Box<Plan>,
     pub filter: Expr,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Project {
-    pub from: Box<Query>,
+pub struct Project<Plan> {
+    pub from: Box<Plan>,
     pub fields: Vec<Column>,
 }
 
@@ -98,18 +121,42 @@ pub enum JoinType {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Limit {
-    pub from: Box<Query>,
+pub struct Limit<Plan> {
+    pub from: Box<Plan>,
     pub limit: u64,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Query {
+pub enum LogicalPlan {
     From(From),
-    Filter(Filter),
-    Join(Join),
-    Project(Project),
-    Limit(Limit),
+    Filter(Filter<LogicalPlan>),
+    Join(Join<LogicalPlan>),
+    Project(Project<LogicalPlan>),
+    Limit(Limit<LogicalPlan>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TableScan {
+    pub table_name: TableName,
+    pub table_alias: Option<TableAlias>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IndexScan {
+    pub table_name: TableName,
+    pub table_alias: Option<TableAlias>,
+    pub index: Index,
+    pub values: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum PhysicalPlan {
+    TableScan(TableScan),
+    IndexScan(IndexScan),
+    Filter(Filter<PhysicalPlan>),
+    Join(Join<PhysicalPlan>),
+    Project(Project<PhysicalPlan>),
+    Limit(Limit<PhysicalPlan>),
 }
 
 #[derive(Debug, PartialEq, Clone)]

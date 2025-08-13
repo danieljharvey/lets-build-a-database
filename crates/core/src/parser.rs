@@ -3,8 +3,8 @@ use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
 use crate::types::{
-    Column, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Project, Query, TableAlias,
-    TableName,
+    Column, ColumnName, Expr, Filter, From, Join, JoinOn, JoinType, Limit, LogicalPlan, Op,
+    Project, TableAlias, TableName,
 };
 
 #[derive(Debug)]
@@ -54,7 +54,7 @@ impl std::convert::From<JoinParseError> for ParseError {
     }
 }
 
-pub fn parse(sql: &str) -> Result<Query, ParseError> {
+pub fn parse(sql: &str) -> Result<LogicalPlan, ParseError> {
     let dialect = AnsiDialect {}; // or AnsiDialect
 
     let ast = Parser::parse_sql(&dialect, sql).unwrap();
@@ -66,14 +66,14 @@ pub fn parse(sql: &str) -> Result<Query, ParseError> {
     }
 }
 
-fn from_statement(statement: &ast::Statement) -> Result<Query, ParseError> {
+fn from_statement(statement: &ast::Statement) -> Result<LogicalPlan, ParseError> {
     match statement {
         ast::Statement::Query(query) => from_query(query),
         _ => Err(ParseError::OnlyQueryIsSupported),
     }
 }
 
-fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
+fn from_query(query: &ast::Query) -> Result<LogicalPlan, ParseError> {
     let ast::Query {
         with,
         body,
@@ -122,7 +122,7 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
     let mut query = from_body(body)?;
 
     if let Some(limit) = limit_clause {
-        query = Query::Limit(Limit {
+        query = LogicalPlan::Limit(Limit {
             from: Box::new(query),
             limit: from_limit(limit)?,
         });
@@ -161,14 +161,14 @@ fn from_limit(limit: &ast::LimitClause) -> Result<u64, ParseError> {
     }
 }
 
-fn from_body(body: &ast::SetExpr) -> Result<Query, ParseError> {
+fn from_body(body: &ast::SetExpr) -> Result<LogicalPlan, ParseError> {
     match body {
         ast::SetExpr::Select(select) => from_select(select),
         _ => Err(ParseError::OnlySelectIsSupported),
     }
 }
 
-fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
+fn from_select(select: &ast::Select) -> Result<LogicalPlan, ParseError> {
     let ast::Select {
         select_token: _,
         distinct,
@@ -221,14 +221,14 @@ fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
     let mut query = from_from(from)?;
 
     if let Some(filter) = selection.as_ref().map(from_selection).transpose()? {
-        query = Query::Filter(Filter {
+        query = LogicalPlan::Filter(Filter {
             filter,
             from: Box::new(query),
         });
     }
 
     if let Some(fields) = from_projection(projection)? {
-        query = Query::Project(Project {
+        query = LogicalPlan::Project(Project {
             from: Box::new(query),
             fields,
         });
@@ -240,7 +240,7 @@ fn from_select(select: &ast::Select) -> Result<Query, ParseError> {
 fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
     match expr {
         ast::Expr::Identifier(ident) => Ok(Column {
-            name: ident.value.to_string(),
+            name: ColumnName(ident.value.to_string()),
             table_alias: None,
         }),
         ast::Expr::CompoundIdentifier(idents) => {
@@ -248,7 +248,7 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
                 (idents.first(), idents.get(1), idents.get(2))
             {
                 Ok(Column {
-                    name: column.to_string(),
+                    name: ColumnName(column.to_string()),
                     table_alias: Some(TableAlias(table_alias.to_string())),
                 })
             } else {
@@ -300,14 +300,16 @@ fn from_selection(expr: &ast::Expr) -> Result<Expr, ParseError> {
     }
 }
 
-fn from_from(froms: &[ast::TableWithJoins]) -> Result<Query, ParseError> {
+fn from_from(froms: &[ast::TableWithJoins]) -> Result<LogicalPlan, ParseError> {
     if let Some(table_with_joins) = froms.iter().next() {
         let ast::TableWithJoins { relation, joins } = table_with_joins;
         let from = from_relation(relation)?;
 
         joins
             .iter()
-            .try_fold(Query::From(from), |query, join| from_join(join, query))
+            .try_fold(LogicalPlan::From(from), |query, join| {
+                from_join(join, query)
+            })
     } else {
         Err(ParseError::EmptyFromNotSupported)
     }
@@ -348,7 +350,7 @@ fn from_relation(table: &ast::TableFactor) -> Result<From, ParseError> {
     }
 }
 
-fn from_join(join: &ast::Join, query: Query) -> Result<Query, ParseError> {
+fn from_join(join: &ast::Join, query: LogicalPlan) -> Result<LogicalPlan, ParseError> {
     let from = from_relation(&join.relation)?;
 
     let (join_type, left_column_on, right_column_on) = from_join_operator(&join.join_operator)?;
@@ -361,14 +363,14 @@ fn from_join(join: &ast::Join, query: Query) -> Result<Query, ParseError> {
     let join = Join {
         join_type,
         left_from: Box::new(query),
-        right_from: Box::new(Query::From(from)),
+        right_from: Box::new(LogicalPlan::From(from)),
         on: JoinOn {
             left: left_column_on,
             right: right_column_on,
         },
     };
 
-    Ok(Query::Join(join))
+    Ok(LogicalPlan::Join(join))
 }
 
 fn from_join_operator(
@@ -423,13 +425,15 @@ fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{Column, Expr, Filter, From, Join, JoinOn, JoinType, Op, Query, TableName};
+    use crate::types::{
+        Column, Expr, Filter, From, Join, JoinOn, JoinType, LogicalPlan, Op, TableName,
+    };
 
     use super::parse;
 
     #[test]
     fn test_parse_basic_select() {
-        let expected = Query::From(From {
+        let expected = LogicalPlan::From(From {
             table_name: TableName("albums".into()),
             table_alias: None,
         });
@@ -441,16 +445,13 @@ mod tests {
 
     #[test]
     fn test_parse_basic_select_with_where() {
-        let expected = Query::Filter(Filter {
-            from: Box::new(Query::From(From {
+        let expected = LogicalPlan::Filter(Filter {
+            from: Box::new(LogicalPlan::From(From {
                 table_name: TableName("albums".into()),
                 table_alias: None,
             })),
             filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "album_id".to_string(),
-                    table_alias: None,
-                },
+                column: Column::from("album_id"),
                 op: Op::Equals,
                 literal: 1.into(),
             },
@@ -463,33 +464,24 @@ mod tests {
 
     #[test]
     fn test_parse_basic_join() {
-        let expected = Query::Filter(Filter {
-            from: Box::new(Query::Join(Join {
+        let expected = LogicalPlan::Filter(Filter {
+            from: Box::new(LogicalPlan::Join(Join {
                 join_type: JoinType::Inner,
-                left_from: Box::new(Query::From(From {
+                left_from: Box::new(LogicalPlan::From(From {
                     table_name: TableName("species".to_string()),
                     table_alias: None,
                 })),
-                right_from: Box::new(Query::From(From {
+                right_from: Box::new(LogicalPlan::From(From {
                     table_name: TableName("animal".to_string()),
                     table_alias: None,
                 })),
                 on: JoinOn {
-                    left: Column {
-                        name: "species_id".to_string(),
-                        table_alias: None,
-                    },
-                    right: Column {
-                        name: "species_id".to_string(),
-                        table_alias: None,
-                    },
+                    left: Column::from("species_id"),
+                    right: Column::from("species_id"),
                 },
             })),
             filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "species_id".to_string(),
-                    table_alias: None,
-                },
+                column: Column::from("species_id"),
                 op: Op::Equals,
                 literal: 3.into(),
             },
