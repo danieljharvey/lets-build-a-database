@@ -6,6 +6,7 @@ mod to_physical_plan;
 
 use std::collections::BTreeMap;
 
+use crate::indexes::ConstructedIndexes;
 use crate::types::{IndexScan, Limit, PhysicalPlan, TableScan};
 use to_physical_plan::to_physical_plan;
 
@@ -117,7 +118,12 @@ fn run_physical_plan(physical_plan: &PhysicalPlan) -> Result<QueryStep, QueryErr
 
 // TODO: pre-calculate indexes and pass them in
 pub fn run_query(query: LogicalPlan) -> Result<QueryStep, QueryError> {
-    let physical_plan = to_physical_plan(query, &BTreeMap::new());
+    let physical_plan = to_physical_plan(
+        query,
+        &ConstructedIndexes {
+            indexes: BTreeMap::new(),
+        },
+    );
     run_physical_plan(&physical_plan)
 }
 
@@ -128,6 +134,16 @@ mod tests {
     #[test]
     fn test_query_select_animals() {
         let query = parse("SELECT * FROM animal").unwrap();
+
+        let result = run_query(query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_query_select_one_animal() {
+        let query = parse("SELECT * FROM animal where animal_id = 1").unwrap();
 
         let result = run_query(query).unwrap();
 

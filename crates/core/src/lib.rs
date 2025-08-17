@@ -1,3 +1,4 @@
+mod catalog;
 mod indexes;
 mod parser;
 mod query;

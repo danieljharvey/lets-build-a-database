@@ -21,7 +21,11 @@ pub struct Index {
 // the items
 #[derive(Debug, PartialEq)]
 pub struct ConstructedIndex {
-    items: BTreeMap<HashedValue, Vec<LineNumber>>,
+    pub items: BTreeMap<HashedValue, Vec<LineNumber>>,
+}
+
+pub struct ConstructedIndexes {
+    pub indexes: BTreeMap<TableName, Vec<(Index, ConstructedIndex)>>,
 }
 
 pub fn construct_index(index: &Index, rows: &[serde_json::Value]) -> ConstructedIndex {
@@ -92,7 +96,7 @@ mod tests {
     }
 }
 
-fn calculate_hash<T: Hash>(t: &T) -> u64 {
+pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
     t.hash(&mut s);
     s.finish()
