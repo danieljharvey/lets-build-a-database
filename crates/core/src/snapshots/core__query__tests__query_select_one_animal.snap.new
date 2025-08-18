@@ -1,0 +1,22 @@
+---
+source: crates/core/src/query.rs
+assertion_line: 171
+expression: result.to_json()
+---
+[
+  {
+    "animal_id": 1,
+    "animal_name": "horse",
+    "species_id": 1
+  },
+  {
+    "animal_id": 2,
+    "animal_name": "dog",
+    "species_id": 1
+  },
+  {
+    "animal_id": 3,
+    "animal_name": "snake",
+    "species_id": 2
+  }
+]

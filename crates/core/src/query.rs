@@ -2,11 +2,17 @@ mod filter;
 mod from;
 mod join;
 mod project;
+mod to_physical_plan;
 
-use crate::types::Limit;
+pub use from::raw_rows_for_table;
+
+use crate::catalog::{self, Catalog};
+use crate::indexes::ConstructedIndexes;
+use crate::types::{IndexScan, Limit, PhysicalPlan, TableScan};
+use to_physical_plan::to_physical_plan;
 
 use super::types::QueryStep;
-use super::types::{Column, Filter, From, Join, Project, Query};
+use super::types::{Column, Filter, Join, LogicalPlan, Project};
 
 #[derive(Debug)]
 pub enum QueryError {
@@ -15,18 +21,32 @@ pub enum QueryError {
     FilterError(filter::FilterError),
 }
 
-pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
-    match query {
-        Query::From(From {
+fn run_physical_plan(
+    physical_plan: &PhysicalPlan,
+    catalog: &Catalog,
+) -> Result<QueryStep, QueryError> {
+    match physical_plan {
+        PhysicalPlan::TableScan(TableScan {
             table_name,
             table_alias,
-        }) => Ok(from::table_scan(table_name, table_alias.as_ref())),
-        Query::Filter(Filter { from, filter }) => {
+        }) => Ok(from::table_scan(table_name, table_alias.as_ref(), catalog)),
+        PhysicalPlan::IndexScan(IndexScan {
+            table_name,
+            table_alias,
+            index,
+            values,
+        }) => Ok(from::index_scan(
+            table_name,
+            table_alias.as_ref(),
+            index,
+            values.catalog,
+        )),
+        PhysicalPlan::Filter(Filter { from, filter }) => {
             let QueryStep {
                 schema,
                 rows,
                 mut cost,
-            } = run_query(from)?;
+            } = run_physical_plan(from, catalog)?;
 
             let mut filtered_rows = vec![];
 
@@ -43,12 +63,12 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 cost,
             })
         }
-        Query::Project(Project { from, fields }) => {
+        PhysicalPlan::Project(Project { from, fields }) => {
             let QueryStep {
                 schema,
                 rows,
                 mut cost,
-            } = run_query(from)?;
+            } = run_physical_plan(from, catalog)?;
 
             let mut projected_rows = vec![];
 
@@ -65,19 +85,19 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 cost,
             })
         }
-        Query::Limit(Limit { limit, from }) => {
+        PhysicalPlan::Limit(Limit { limit, from }) => {
             let QueryStep {
                 schema,
                 mut rows,
                 cost,
-            } = run_query(from)?;
+            } = run_physical_plan(from, catalog)?;
             let size: usize = (*limit).try_into().unwrap();
 
             rows.truncate(size);
 
             Ok(QueryStep { schema, rows, cost })
         }
-        Query::Join(Join {
+        PhysicalPlan::Join(Join {
             left_from,
             right_from,
             join_type,
@@ -87,13 +107,13 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 schema: left_schema,
                 rows: left_rows,
                 cost: mut left_cost,
-            } = run_query(left_from)?;
+            } = run_physical_plan(left_from, catalog)?;
 
             let QueryStep {
                 schema: right_schema,
                 rows: right_rows,
                 cost: right_cost,
-            } = run_query(right_from)?;
+            } = run_physical_plan(right_from, catalog)?;
 
             left_cost.extend(&right_cost);
 
@@ -110,15 +130,48 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
     }
 }
 
+// TODO: pre-calculate indexes and pass them in
+pub fn run_query(
+    query: LogicalPlan,
+    constructed_indexes: &ConstructedIndexes,
+    catalog: &Catalog,
+) -> Result<QueryStep, QueryError> {
+    let physical_plan = to_physical_plan(query, constructed_indexes);
+    run_physical_plan(&physical_plan, catalog)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{parser::parse, run_query};
+    use crate::{
+        catalog::get_static_catalog,
+        parser::parse,
+        run_query,
+        types::{LogicalPlan, QueryStep},
+    };
+
+    use super::QueryError;
+
+    fn test_run_query(query: LogicalPlan) -> Result<QueryStep, QueryError> {
+        let catalog = get_static_catalog();
+        let constructed_indexes = catalog.construct_indexes();
+        run_query(query, &constructed_indexes, &catalog)
+    }
 
     #[test]
     fn test_query_select_animals() {
         let query = parse("SELECT * FROM animal").unwrap();
 
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_query_select_one_animal() {
+        let query = parse("SELECT * FROM animal where animal_id = 1").unwrap();
+
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -127,7 +180,7 @@ mod tests {
     #[test]
     fn test_query_select_horse() {
         let query = parse("select * from animal where animal_name = 'horse'").unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -136,7 +189,7 @@ mod tests {
     #[test]
     fn test_query_projection() {
         let query = parse("select animal_name from animal where animal_name = 'horse'").unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -152,7 +205,7 @@ mod tests {
         where animal_name = 'horse'"#,
         )
         .unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -169,7 +222,7 @@ mod tests {
     "#,
         )
         .unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -186,7 +239,7 @@ mod tests {
     "#,
         )
         .unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -201,7 +254,7 @@ mod tests {
     "#,
         )
         .unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -218,7 +271,7 @@ mod tests {
     "#,
         )
         .unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
@@ -237,7 +290,7 @@ mod tests {
     "#,
         )
         .unwrap();
-        let result = run_query(&query).unwrap();
+        let result = test_run_query(query).unwrap();
 
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
