@@ -1,35 +1,16 @@
+use crate::catalog::Catalog;
+use crate::indexes::Index;
 use crate::types::Cost;
 use crate::types::QueryStep;
 use crate::types::Row;
 use crate::types::Schema;
 use crate::types::TableAlias;
-use crate::types::{Column, TableName};
+use crate::types::{Column, ColumnName, TableName};
 use serde_json::json;
 
 // hard coded vec of column names for now
-fn schema(table_name: &TableName) -> Vec<Column> {
-    match table_name.0.as_str() {
-        "animal" => vec![
-            "animal_id".into(),
-            "animal_name".into(),
-            "species_id".into(),
-        ],
-        "species" => vec!["species_id".into(), "species_name".into()],
-        "Album" => vec!["AlbumId".into(), "Title".into(), "ArtistId".into()],
-        "Artist" => vec!["ArtistId".into(), "Name".into()],
-        "Track" => vec![
-            "TrackId".into(),
-            "Name".into(),
-            "AlbumId".into(),
-            "MediaTypeId".into(),
-            "GenreId".into(),
-            "Composer".into(),
-            "Milliseconds".into(),
-            "Bytes".into(),
-            "UnitPrice".into(),
-        ],
-        _ => todo!("unknown schema"),
-    }
+fn schema(table_name: &TableName, catalog: &Catalog) -> Vec<ColumnName> {
+    catalog.tables.get(table_name).unwrap().columns.clone()
 }
 
 fn split_to_rows(str: &str) -> Vec<serde_json::Value> {
@@ -62,16 +43,61 @@ pub fn raw_rows_for_table(table_name: &TableName) -> Vec<serde_json::Value> {
 }
 
 // scan of static values for now
-pub fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> QueryStep {
-    let columns = schema(table_name)
+pub fn table_scan(
+    table_name: &TableName,
+    table_alias: Option<&TableAlias>,
+    catalog: &Catalog,
+) -> QueryStep {
+    let columns = schema(table_name, catalog)
         .into_iter()
-        .map(|column| Column {
+        .map(|name| Column {
             table_alias: table_alias.cloned(),
-            ..column
+            name,
         })
         .collect();
 
     let raw = raw_rows_for_table(table_name);
+
+    let mut cost = Cost::new();
+
+    let rows = raw
+        .into_iter()
+        .map(|raw| {
+            cost.increment_rows_processed();
+            into_row(raw, &columns)
+        })
+        .collect();
+
+    QueryStep {
+        schema: Schema { columns },
+        rows,
+        cost,
+    }
+}
+
+// scan of static values for now
+pub fn index_scan(
+    table_name: &TableName,
+    table_alias: Option<&TableAlias>,
+    index: &Index,
+    values: &Vec<serde_json::Value>,
+    catalog: &Catalog,
+) -> QueryStep {
+    let columns = schema(table_name, catalog)
+        .into_iter()
+        .map(|name| Column {
+            table_alias: table_alias.cloned(),
+            name,
+        })
+        .collect();
+
+    
+
+    let raw = raw_rows_for_table(table_name).into_iter().;
+    
+    // get only relevant rows from `raw`
+
+
 
     let mut cost = Cost::new();
 
