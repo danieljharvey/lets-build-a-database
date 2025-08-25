@@ -29,7 +29,7 @@ pub enum ParseError {
     DistinctNotSupported,
     TableOnlyInFrom,
     EmptyObjectName,
-    UnknownExprPart,
+    UnknownExprPart { expr: String },
     GroupByNotSupported,
     SortByNotSupported,
     ExpectedIdent,
@@ -39,7 +39,7 @@ pub enum ParseError {
     Join(JoinParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
-    UnknownBinaryOperator,
+    UnknownOperator,
 }
 
 #[derive(Debug)]
@@ -266,7 +266,9 @@ fn from_binary_operator(op: &ast::BinaryOperator) -> Result<Op, ParseError> {
         ast::BinaryOperator::GtEq => Ok(Op::GreaterThanOrEqual),
         ast::BinaryOperator::Lt => Ok(Op::LessThan),
         ast::BinaryOperator::LtEq => Ok(Op::LessThanOrEqual),
-        _ => Err(ParseError::UnknownBinaryOperator),
+        ast::BinaryOperator::Plus => Ok(Op::Add),
+        ast::BinaryOperator::Minus => Ok(Op::Subtract),
+        _ => Err(ParseError::UnknownOperator),
     }
 }
 
@@ -291,12 +293,54 @@ fn value_from_selection(expr: &ast::Expr) -> Result<serde_json::Value, ParseErro
 
 fn from_selection(expr: &ast::Expr) -> Result<Expr, ParseError> {
     match expr {
-        ast::Expr::BinaryOp { left, op, right } => Ok(Expr::ColumnComparison {
-            column: identifier_from_selection(left)?,
+        ast::Expr::BinaryOp { left, op, right } => Ok(Expr::BinaryOperation {
+            left: Box::new(from_selection(left)?),
             op: from_binary_operator(op)?,
-            literal: value_from_selection(right)?,
+            right: Box::new(from_selection(right)?),
         }),
-        _ => Err(ParseError::UnknownExprPart),
+        ast::Expr::Value(value) => {
+            let ast::ValueWithSpan {
+                value: inner_value, ..
+            } = value;
+            let literal = if let ast::Value::SingleQuotedString(s) = inner_value {
+                Ok(s.clone().into())
+            } else {
+                // last resort, stringify the thing and throw it at serde_json decode
+                let val_string = value.to_string();
+                serde_json::from_str(val_string.as_str())
+                    .map_err(|e| ParseError::SerdeJsonError(val_string, e))
+            }?;
+            Ok(Expr::Literal { literal })
+        }
+        ast::Expr::Identifier(ident) => Ok(Expr::Column {
+            column: Column {
+                name: ident.value.to_string(),
+                table_alias: None,
+            },
+        }),
+        ast::Expr::CompoundIdentifier(idents) => {
+            if let (Some(table_alias), Some(column), None) =
+                (idents.first(), idents.get(1), idents.get(2))
+            {
+                Ok(Expr::Column {
+                    column: Column {
+                        name: column.to_string(),
+                        table_alias: Some(TableAlias(table_alias.to_string())),
+                    },
+                })
+            } else {
+                Err(ParseError::ExpectedTwoIdents)
+            }
+        }
+        ast::Expr::Nested(expr) => Ok(Expr::Nested {
+            expr: Box::new(from_selection(expr)?),
+        }),
+        _ => {
+            dbg!(&expr);
+            Err(ParseError::UnknownExprPart {
+                expr: expr.to_string(),
+            })
+        }
     }
 }
 
@@ -446,13 +490,15 @@ mod tests {
                 table_name: TableName("albums".into()),
                 table_alias: None,
             })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "album_id".to_string(),
-                    table_alias: None,
-                },
+            filter: Expr::BinaryOperation {
+                left: Box::new(Expr::Column {
+                    column: Column {
+                        name: "album_id".to_string(),
+                        table_alias: None,
+                    },
+                }),
                 op: Op::Equals,
-                literal: 1.into(),
+                right: Box::new(Expr::Literal { literal: 1.into() }),
             },
         });
 
@@ -485,13 +531,15 @@ mod tests {
                     },
                 },
             })),
-            filter: Expr::ColumnComparison {
-                column: Column {
-                    name: "species_id".to_string(),
-                    table_alias: None,
-                },
+            filter: Expr::BinaryOperation {
+                left: Box::new(Expr::Column {
+                    column: Column {
+                        name: "species_id".to_string(),
+                        table_alias: None,
+                    },
+                }),
                 op: Op::Equals,
-                literal: 3.into(),
+                right: Box::new(Expr::Literal { literal: 3.into() }),
             },
         });
 

@@ -242,4 +242,19 @@ mod tests {
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
     }
+
+    #[test]
+    fn test_select_filter_with_column_reference() {
+        let query = parse(
+            r#"
+        select * from Album 
+        where AlbumId = (ArtistId + 1 + 1) - 1 
+    "#,
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
 }
