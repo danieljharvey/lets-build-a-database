@@ -480,7 +480,7 @@ mod tests {
 
         let result = parse("SELECT * FROM albums").unwrap();
 
-        assert_eq!(result, expected)
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -504,7 +504,7 @@ mod tests {
 
         let result = parse("SELECT * FROM albums WHERE album_id = 1").unwrap();
 
-        assert_eq!(result, expected)
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -544,16 +544,16 @@ mod tests {
         });
 
         let result = parse(
-            r#"
+            r"
             SELECT * FROM species
             JOIN 
               animal ON species_id
             WHERE
               species_id = 3
-            "#,
+            ",
         )
         .unwrap();
 
-        assert_eq!(result, expected)
+        assert_eq!(result, expected);
     }
 }

@@ -13,7 +13,7 @@ pub fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> Result<
     match evaluate_expr(row, schema, where_expr)? {
         serde_json::Value::Bool(b) => Ok(b),
         other => Err(QueryError::FilterError(FilterError::ExpectedBooleanType {
-            value: other.clone(),
+            value: other,
         })),
     }
 }
@@ -21,13 +21,13 @@ pub fn apply_predicate(row: &Row, schema: &Schema, where_expr: &Expr) -> Result<
 fn evaluate_expr(row: &Row, schema: &Schema, expr: &Expr) -> Result<serde_json::Value, QueryError> {
     match expr {
         Expr::BinaryOperation { left, op, right } => {
-            let left = evaluate_expr(row, schema, &left)?;
-            let right = evaluate_expr(row, schema, &right)?;
+            let left = evaluate_expr(row, schema, left)?;
+            let right = evaluate_expr(row, schema, right)?;
 
-            match_op(&left, &op, &right).map_err(QueryError::FilterError)
+            match_op(&left, op, &right).map_err(QueryError::FilterError)
         }
         Expr::Column { column } => row
-            .get_column(&column, schema)
+            .get_column(column, schema)
             .ok_or_else(|| QueryError::ColumnNotFoundInSchema {
                 column_name: column.clone(),
             })
