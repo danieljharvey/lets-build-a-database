@@ -145,11 +145,11 @@ mod tests {
     #[test]
     fn test_select_horse_and_species() {
         let query = parse(
-            r#"
+            r"
         select * from animal 
         join species 
             on species_id 
-        where animal_name = 'horse'"#,
+        where animal_name = 'horse'",
         )
         .unwrap();
         let result = run_query(&query).unwrap();
@@ -161,12 +161,12 @@ mod tests {
     #[test]
     fn test_select_species_and_animals() {
         let query = parse(
-            r#"
+            r"
         select * from species 
           join animal on species_id
         where
           species_id >= 3 
-    "#,
+    ",
         )
         .unwrap();
         let result = run_query(&query).unwrap();
@@ -178,12 +178,12 @@ mod tests {
     #[test]
     fn test_select_species_and_animals_left_outer() {
         let query = parse(
-            r#"
+            r"
         select * from species 
           left outer join animal on species_id
         where
           species_id = 3 
-    "#,
+    ",
         )
         .unwrap();
         let result = run_query(&query).unwrap();
@@ -195,10 +195,10 @@ mod tests {
     #[test]
     fn test_select_album() {
         let query = parse(
-            r#"
+            r"
         select * from Album 
         where Title = 'Jagged Little Pill'
-    "#,
+    ",
         )
         .unwrap();
         let result = run_query(&query).unwrap();
@@ -210,12 +210,12 @@ mod tests {
     #[test]
     fn test_select_album_and_artist() {
         let query = parse(
-            r#"
+            r"
         select * from Album 
           join Artist on ArtistId
         where
           ArtistId = 82
-    "#,
+    ",
         )
         .unwrap();
         let result = run_query(&query).unwrap();
@@ -227,14 +227,29 @@ mod tests {
     #[test]
     fn test_select_track_album_and_artist() {
         let query = parse(
-            r#"
+            r"
         select Name, Title, artist.Name from Track
           join Album on AlbumId
           join Artist as artist on ArtistId
         where
           ArtistId = 82
         limit 10
-    "#,
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_select_filter_with_column_reference() {
+        let query = parse(
+            r"
+        select * from Album 
+        where AlbumId = (ArtistId + 1 + 1) - 1 
+    ",
         )
         .unwrap();
         let result = run_query(&query).unwrap();

@@ -30,10 +30,19 @@ impl std::convert::From<&str> for Column {
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
-    ColumnComparison {
+    Column {
         column: Column,
-        op: Op,
+    },
+    Literal {
         literal: serde_json::Value,
+    },
+    BinaryOperation {
+        left: Box<Expr>,
+        op: Op,
+        right: Box<Expr>,
+    },
+    Nested {
+        expr: Box<Expr>,
     },
 }
 
@@ -44,6 +53,8 @@ pub enum Op {
     GreaterThanOrEqual,
     LessThan,
     LessThanOrEqual,
+    Add,
+    Subtract,
 }
 
 #[derive(Debug, PartialEq)]

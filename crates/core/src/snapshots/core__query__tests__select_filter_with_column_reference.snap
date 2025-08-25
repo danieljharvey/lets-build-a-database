@@ -1,0 +1,21 @@
+---
+source: crates/core/src/query.rs
+expression: result.to_json()
+---
+[
+  {
+    "AlbumId": 3,
+    "ArtistId": 2,
+    "Title": "Restless and Wild"
+  },
+  {
+    "AlbumId": 59,
+    "ArtistId": 58,
+    "Title": "Deep Purple In Rock"
+  },
+  {
+    "AlbumId": 88,
+    "ArtistId": 87,
+    "Title": "Faceless"
+  }
+]
