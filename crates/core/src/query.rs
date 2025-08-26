@@ -107,6 +107,7 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 left_cost,
             )
         }
+        Query::OrderBy(_) => todo!("run_query OrderBy"),
     }
 }
 
@@ -249,6 +250,22 @@ mod tests {
             r"
         select * from Album 
         where AlbumId = (ArtistId + 1 + 1) - 1 
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_select_order_by_name_limit_5() {
+        let query = parse(
+            r"
+        select * from Album
+        order by Title
+        limit 5
     ",
         )
         .unwrap();

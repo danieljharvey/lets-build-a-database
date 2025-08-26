@@ -1,10 +1,10 @@
-use sqlparser::ast::{self, LimitClause};
+use sqlparser::ast::{self, LimitClause, OrderByKind};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
 use crate::types::{
-    Column, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Project, Query, TableAlias,
-    TableName,
+    Column, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Order, OrderBy, OrderByExpr,
+    Project, Query, TableAlias, TableName,
 };
 
 #[derive(Debug)]
@@ -16,7 +16,6 @@ pub enum ParseError {
     OffsetCommaLimitNotSupported,
     LimitByNotSupported,
     LimitMustBeInt,
-    OrderByNotSupported,
     FetchNotSupported,
     LocksNotSupported,
     ForClauseNotSupported,
@@ -37,9 +36,16 @@ pub enum ParseError {
     UnsupportedProjectionField,
     TableAliasColumnsNotSupported,
     Join(JoinParseError),
+    OrderBy(OrderByParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
     UnknownOperator,
+}
+
+#[derive(Debug)]
+pub enum OrderByParseError {
+    UnsupportedOrderBy,
+    NullsFirstNotSupported,
 }
 
 #[derive(Debug)]
@@ -91,10 +97,6 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
         return Err(ParseError::WithNotSupported);
     }
 
-    if order_by.is_some() {
-        return Err(ParseError::OrderByNotSupported);
-    }
-
     if fetch.is_some() {
         return Err(ParseError::FetchNotSupported);
     }
@@ -121,6 +123,13 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
 
     let mut query = from_body(body)?;
 
+    if let Some(order_by) = order_by {
+        query = Query::OrderBy(OrderBy {
+            from: Box::new(query),
+            order_by_exprs: from_order_by(order_by)?,
+        })
+    }
+
     if let Some(limit) = limit_clause {
         query = Query::Limit(Limit {
             from: Box::new(query),
@@ -129,6 +138,30 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
     }
 
     Ok(query)
+}
+
+fn from_order_by(order_by: &ast::OrderBy) -> Result<Vec<OrderByExpr>, ParseError> {
+    let OrderByKind::Expressions(order_by_expressions) = &order_by.kind else {
+        return Err(ParseError::OrderBy(OrderByParseError::UnsupportedOrderBy));
+    };
+
+    order_by_expressions
+        .iter()
+        .map(|expr| {
+            let column = identifier_from_selection(&expr.expr)?;
+            let order = if expr.options.asc.unwrap_or(true) {
+                Order::Asc
+            } else {
+                Order::Desc
+            };
+            if expr.options.nulls_first.is_some() {
+                return Err(ParseError::OrderBy(
+                    OrderByParseError::NullsFirstNotSupported,
+                ));
+            }
+            Ok(OrderByExpr { column, order })
+        })
+        .collect()
 }
 
 fn from_limit(limit: &ast::LimitClause) -> Result<u64, ParseError> {

@@ -1,0 +1,32 @@
+---
+source: crates/core/src/query.rs
+assertion_line: 274
+expression: result.to_json()
+---
+[
+  {
+    "AlbumId": 1,
+    "ArtistId": 1,
+    "Title": "For Those About To Rock We Salute You"
+  },
+  {
+    "AlbumId": 2,
+    "ArtistId": 2,
+    "Title": "Balls to the Wall"
+  },
+  {
+    "AlbumId": 3,
+    "ArtistId": 2,
+    "Title": "Restless and Wild"
+  },
+  {
+    "AlbumId": 4,
+    "ArtistId": 1,
+    "Title": "Let There Be Rock"
+  },
+  {
+    "AlbumId": 5,
+    "ArtistId": 3,
+    "Title": "Big Ones"
+  }
+]
