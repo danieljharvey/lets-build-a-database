@@ -31,12 +31,13 @@ pub enum ParseError {
     UnknownExprPart { expr: String },
     GroupByNotSupported,
     SortByNotSupported,
-    ExpectedIdent,
+    ExpectedIdent { found: String },
     ExpectedTwoIdents,
     UnsupportedProjectionField,
     TableAliasColumnsNotSupported,
     Join(JoinParseError),
     OrderBy(OrderByParseError),
+    Function(FunctionParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
     UnknownOperator,
@@ -52,6 +53,12 @@ pub enum OrderByParseError {
 pub enum JoinParseError {
     UnsupportedJoinOperator,
     UnsupportedJoinConstraint,
+}
+
+#[derive(Debug)]
+pub enum FunctionParseError {
+    OdbcSyntaxNotSupported,
+    ParametersNotSupported
 }
 
 impl std::convert::From<JoinParseError> for ParseError {
@@ -281,14 +288,16 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
                 (idents.first(), idents.get(1), idents.get(2))
             {
                 Ok(Column {
-                    name: column.to_string(),
+,                    name: column.to_string(),
                     table_alias: Some(TableAlias(table_alias.to_string())),
                 })
             } else {
                 Err(ParseError::ExpectedTwoIdents)
             }
         }
-        _ => Err(ParseError::ExpectedIdent),
+        _ => Err(ParseError::ExpectedIdent {
+            found: expr.to_string(),
+        }),
     }
 }
 
@@ -368,10 +377,41 @@ fn from_selection(expr: &ast::Expr) -> Result<Expr, ParseError> {
         ast::Expr::Nested(expr) => Ok(Expr::Nested {
             expr: Box::new(from_selection(expr)?),
         }),
+        ast::Expr::Function(function) => {
+            from_function(function).map_err(ParseError::Function)
+        }
         _ => Err(ParseError::UnknownExprPart {
             expr: expr.to_string(),
         }),
     }
+}
+
+
+fn from_function(function: &ast::Function) -> Result<Expr, FunctionParseError> {
+    let ast::Function {
+        name,
+        uses_odbc_syntax,
+        parameters,
+        args,
+        filter,
+        null_treatment,
+        over,
+        within_group,
+    } = function;
+
+    if *uses_odbc_syntax {
+        return Err(FunctionParseError::OdbcSyntaxNotSupported);
+    }
+
+    if !matches!(parameters,ast::FunctionArguments::None) {
+        return Err(FunctionParseError::ParametersNotSupported);
+    }
+
+    let function_name = "broken".to_string();
+
+    let args = vec![]; 
+
+    Ok(Expr::FunctionCall { function_name , args })
 }
 
 fn from_from(froms: &[ast::TableWithJoins]) -> Result<Query, ParseError> {
@@ -474,7 +514,7 @@ fn table_name_from_object_name(object_name: &ast::ObjectName) -> Result<TableNam
     }
 }
 
-fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column>>, ParseError> {
+fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Expr>>, ParseError> {
     if select_items.len() == 1 {
         if let Some(ast::SelectItem::Wildcard(_)) = select_items.first() {
             return Ok(None);
@@ -486,8 +526,8 @@ fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column
     for select_item in select_items {
         match select_item {
             ast::SelectItem::UnnamedExpr(expr) => {
-                let identifier = identifier_from_selection(expr)?;
-                fields.push(identifier);
+                let expr = from_selection(expr)?;
+                fields.push(expr);
             }
             _ => return Err(ParseError::UnsupportedProjectionField),
         }

@@ -44,6 +44,10 @@ pub enum Expr {
     Nested {
         expr: Box<Expr>,
     },
+    FunctionCall {
+        function_name: String,
+        args: Vec<Expr>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -99,7 +103,7 @@ pub struct Filter {
 #[derive(Debug, PartialEq)]
 pub struct Project {
     pub from: Box<Query>,
-    pub fields: Vec<Column>,
+    pub fields: Vec<Expr>,
 }
 
 #[derive(Debug, PartialEq)]

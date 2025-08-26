@@ -304,4 +304,19 @@ mod tests {
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
     }
+
+    #[test]
+    fn test_basic_aggregate() {
+        let query = parse(
+            r"
+        select sum(track.Milliseconds), album.Title from Album album
+        join Track track on AlbumId
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
 }
