@@ -288,4 +288,20 @@ mod tests {
         insta::assert_json_snapshot!(result.to_json());
         insta::assert_debug_snapshot!(result.cost);
     }
+
+    #[test]
+    fn test_select_order_by_artist_id_and_title_with_limit() {
+        let query = parse(
+            r"
+        select ArtistId, Title from Album
+        order by ArtistId, Title
+        limit 4
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
 }
