@@ -127,7 +127,7 @@ fn from_query(query: &ast::Query) -> Result<Query, ParseError> {
         query = Query::OrderBy(OrderBy {
             from: Box::new(query),
             order_by_exprs: from_order_by(order_by)?,
-        })
+        });
     }
 
     if let Some(limit) = limit_clause {
@@ -368,12 +368,9 @@ fn from_selection(expr: &ast::Expr) -> Result<Expr, ParseError> {
         ast::Expr::Nested(expr) => Ok(Expr::Nested {
             expr: Box::new(from_selection(expr)?),
         }),
-        _ => {
-            dbg!(&expr);
-            Err(ParseError::UnknownExprPart {
-                expr: expr.to_string(),
-            })
-        }
+        _ => Err(ParseError::UnknownExprPart {
+            expr: expr.to_string(),
+        }),
     }
 }
 

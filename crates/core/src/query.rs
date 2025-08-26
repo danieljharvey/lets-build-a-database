@@ -1,9 +1,10 @@
 mod filter;
 mod from;
 mod join;
+mod order_by;
 mod project;
 
-use crate::types::Limit;
+use crate::types::{Limit, OrderBy};
 
 use super::types::QueryStep;
 use super::types::{Column, Filter, From, Join, Project, Query};
@@ -107,7 +108,20 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 left_cost,
             )
         }
-        Query::OrderBy(_) => todo!("run_query OrderBy"),
+        Query::OrderBy(OrderBy {
+            from,
+            order_by_exprs,
+        }) => {
+            let QueryStep {
+                schema,
+                rows,
+                mut cost,
+            } = run_query(from)?;
+
+            let rows = order_by::order_by(rows, &schema, order_by_exprs, &mut cost);
+
+            Ok(QueryStep { schema, rows, cost })
+        }
     }
 }
 
