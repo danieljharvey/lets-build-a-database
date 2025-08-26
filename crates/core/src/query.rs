@@ -1,9 +1,10 @@
 mod filter;
 mod from;
 mod join;
+mod order_by;
 mod project;
 
-use crate::types::Limit;
+use crate::types::{Limit, OrderBy};
 
 use super::types::QueryStep;
 use super::types::{Column, Filter, From, Join, Project, Query};
@@ -106,6 +107,20 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 join_type,
                 left_cost,
             )
+        }
+        Query::OrderBy(OrderBy {
+            from,
+            order_by_exprs,
+        }) => {
+            let QueryStep {
+                schema,
+                rows,
+                mut cost,
+            } = run_query(from)?;
+
+            let rows = order_by::order_by(rows, &schema, order_by_exprs, &mut cost);
+
+            Ok(QueryStep { schema, rows, cost })
         }
     }
 }
@@ -249,6 +264,38 @@ mod tests {
             r"
         select * from Album 
         where AlbumId = (ArtistId + 1 + 1) - 1 
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_select_order_by_name_limit_5() {
+        let query = parse(
+            r"
+        select * from Album
+        order by Title
+        limit 5
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_select_order_by_artist_id_and_title_with_limit() {
+        let query = parse(
+            r"
+        select ArtistId, Title from Album
+        order by ArtistId, Title
+        limit 4
     ",
         )
         .unwrap();

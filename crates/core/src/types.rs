@@ -115,12 +115,31 @@ pub struct Limit {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct OrderBy {
+    pub from: Box<Query>,
+    pub order_by_exprs: Vec<OrderByExpr>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct OrderByExpr {
+    pub column: Column,
+    pub order: Order,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Order {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Query {
     From(From),
     Filter(Filter),
     Join(Join),
     Project(Project),
     Limit(Limit),
+    OrderBy(OrderBy),
 }
 
 #[derive(Debug, PartialEq, Clone)]

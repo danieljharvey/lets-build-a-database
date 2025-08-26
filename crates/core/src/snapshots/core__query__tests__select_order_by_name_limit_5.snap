@@ -1,0 +1,31 @@
+---
+source: crates/core/src/query.rs
+expression: result.to_json()
+---
+[
+  {
+    "AlbumId": 208,
+    "ArtistId": 136,
+    "Title": "(1997) Black Light Syndrome"
+  },
+  {
+    "AlbumId": 156,
+    "ArtistId": 50,
+    "Title": "...And Justice For All"
+  },
+  {
+    "AlbumId": 257,
+    "ArtistId": 179,
+    "Title": "20th Century Masters - The Millennium Collection: The Best of Scorpions"
+  },
+  {
+    "AlbumId": 296,
+    "ArtistId": 230,
+    "Title": "A Copland Celebration, Vol. I"
+  },
+  {
+    "AlbumId": 94,
+    "ArtistId": 90,
+    "Title": "A Matter of Life and Death"
+  }
+]
