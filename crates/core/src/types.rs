@@ -45,9 +45,19 @@ pub enum Expr {
         expr: Box<Expr>,
     },
     FunctionCall {
-        function_name: String,
+        function_name: FunctionName,
         args: Vec<Expr>,
     },
+}
+
+#[derive(Debug, PartialEq)]
+pub enum FunctionName {
+    Aggregate(AggregateFunctionName),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AggregateFunctionName {
+    Sum,
 }
 
 #[derive(Debug, PartialEq)]
