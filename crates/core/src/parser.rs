@@ -480,16 +480,8 @@ fn from_function_argument_list(
 
     args.iter()
         .map(|arg| match arg {
-            FunctionArg::Named {
-                name,
-                arg,
-                operator,
-            } => todo!("what"),
-            FunctionArg::ExprNamed {
-                name,
-                arg,
-                operator,
-            } => todo!("who"),
+            FunctionArg::Named { .. } => todo!("what"),
+            FunctionArg::ExprNamed { .. } => todo!("who"),
             FunctionArg::Unnamed(expr) => from_function_arg_expr(expr),
         })
         .collect()

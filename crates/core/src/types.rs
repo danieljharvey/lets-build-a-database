@@ -55,9 +55,28 @@ pub enum FunctionName {
     Aggregate(AggregateFunctionName),
 }
 
+impl Display for FunctionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionName::Aggregate(aggregate_function_name) => {
+                write!(f, "{aggregate_function_name}")
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AggregateFunctionName {
     Sum,
+}
+
+impl Display for AggregateFunctionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            AggregateFunctionName::Sum => "sum",
+        };
+        write!(f, "{str}")
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -69,6 +88,21 @@ pub enum Op {
     LessThanOrEqual,
     Add,
     Subtract,
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Op::Equals => "equals",
+            Op::GreaterThan => "greater_than",
+            Op::GreaterThanOrEqual => "greater_than_or_equal",
+            Op::LessThan => "less_than",
+            Op::LessThanOrEqual => "less_than_or_equal",
+            Op::Add => "add",
+            Op::Subtract => "subtract",
+        };
+        write!(f, "{str}")
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -168,6 +202,12 @@ impl Row {
         self.items.get(index)
     }
 
+    pub fn get_named(&self, named: &String, schema: &Schema) -> Option<&serde_json::Value> {
+        let index = schema.get_index_for_named(named)?;
+
+        self.items.get(index)
+    }
+
     pub fn extend(&mut self, row: Row) {
         self.items.extend(row.items);
     }
@@ -175,7 +215,24 @@ impl Row {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Schema {
-    pub columns: Vec<Column>,
+    pub columns: Vec<SchemaColumn>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum SchemaColumn {
+    Column(Column),
+    Named(String),
+}
+
+impl Display for SchemaColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            SchemaColumn::Column(column) => write!(f, "{column}"),
+            SchemaColumn::Named(string) => {
+                write!(f, "{string}")
+            }
+        }
+    }
 }
 
 impl Schema {
@@ -183,7 +240,21 @@ impl Schema {
         self.columns
             .iter()
             .enumerate()
-            .find(|(_, column_name)| column_name == &column)
+            .find(|(_, schema_column)| match schema_column {
+                SchemaColumn::Column(column_name) => column_name == column,
+                _ => false,
+            })
+            .map(|(i, _)| i)
+    }
+
+    pub fn get_index_for_named(&self, named: &String) -> Option<usize> {
+        self.columns
+            .iter()
+            .enumerate()
+            .find(|(_, schema_column)| match schema_column {
+                SchemaColumn::Named(name) => name == named,
+                _ => false,
+            })
             .map(|(i, _)| i)
     }
 
@@ -206,7 +277,12 @@ impl QueryStep {
         for row in &self.rows {
             let mut output_row = serde_json::Map::new();
             for column in &self.schema.columns {
-                let value = row.get_column(column, &self.schema).unwrap();
+                let value = match column {
+                    SchemaColumn::Column(column_name) => {
+                        row.get_column(column_name, &self.schema).unwrap()
+                    }
+                    SchemaColumn::Named(name) => row.get_named(name, &self.schema).unwrap(),
+                };
                 output_row.insert(column.to_string(), value.clone());
             }
             output_rows.push(serde_json::Value::Object(output_row));
