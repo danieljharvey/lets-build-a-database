@@ -1,10 +1,12 @@
-use sqlparser::ast::{self, LimitClause, OrderByKind};
+use sqlparser::ast::{
+    self, FunctionArg, FunctionArgExpr, FunctionArgumentList, LimitClause, OrderByKind,
+};
 use sqlparser::dialect::AnsiDialect;
 use sqlparser::parser::Parser;
 
 use crate::types::{
-    Column, Expr, Filter, From, Join, JoinOn, JoinType, Limit, Op, Order, OrderBy, OrderByExpr,
-    Project, Query, TableAlias, TableName,
+    AggregateFunctionName, Column, Expr, Filter, From, FunctionName, Join, JoinOn, JoinType, Limit,
+    Op, Order, OrderBy, OrderByExpr, Project, Query, TableAlias, TableName,
 };
 
 #[derive(Debug)]
@@ -31,12 +33,13 @@ pub enum ParseError {
     UnknownExprPart { expr: String },
     GroupByNotSupported,
     SortByNotSupported,
-    ExpectedIdent,
+    ExpectedIdent { found: String },
     ExpectedTwoIdents,
     UnsupportedProjectionField,
     TableAliasColumnsNotSupported,
     Join(JoinParseError),
     OrderBy(OrderByParseError),
+    Function(FunctionParseError),
     ExpectedValue(ast::Expr),
     SerdeJsonError(String, serde_json::Error),
     UnknownOperator,
@@ -52,6 +55,21 @@ pub enum OrderByParseError {
 pub enum JoinParseError {
     UnsupportedJoinOperator,
     UnsupportedJoinConstraint,
+}
+
+#[derive(Debug)]
+pub enum FunctionParseError {
+    OdbcSyntaxNotSupported,
+    DuplicateTreatmentNotSupported,
+    ClausesNotSupported,
+    ParametersNotSupported,
+    WithinGroupNotSupported,
+    FilterNotSupported,
+    NullTreatmentNotSupported,
+    OverNotSupported,
+    EmptyObjectName,
+    SubQueryNotSupported,
+    UnknownFunctionName { ident: String },
 }
 
 impl std::convert::From<JoinParseError> for ParseError {
@@ -288,7 +306,9 @@ fn identifier_from_selection(expr: &ast::Expr) -> Result<Column, ParseError> {
                 Err(ParseError::ExpectedTwoIdents)
             }
         }
-        _ => Err(ParseError::ExpectedIdent),
+        _ => Err(ParseError::ExpectedIdent {
+            found: expr.to_string(),
+        }),
     }
 }
 
@@ -368,8 +388,127 @@ fn from_selection(expr: &ast::Expr) -> Result<Expr, ParseError> {
         ast::Expr::Nested(expr) => Ok(Expr::Nested {
             expr: Box::new(from_selection(expr)?),
         }),
+        ast::Expr::Function(function) => from_function(function),
         _ => Err(ParseError::UnknownExprPart {
             expr: expr.to_string(),
+        }),
+    }
+}
+
+fn from_function(function: &ast::Function) -> Result<Expr, ParseError> {
+    let ast::Function {
+        name,
+        uses_odbc_syntax,
+        parameters,
+        args,
+        filter,
+        null_treatment,
+        over,
+        within_group,
+    } = function;
+
+    if *uses_odbc_syntax {
+        return Err(ParseError::Function(
+            FunctionParseError::OdbcSyntaxNotSupported,
+        ));
+    }
+
+    if !within_group.is_empty() {
+        return Err(ParseError::Function(
+            FunctionParseError::WithinGroupNotSupported,
+        ));
+    }
+
+    if filter.is_some() {
+        return Err(ParseError::Function(FunctionParseError::FilterNotSupported));
+    }
+
+    if over.is_some() {
+        return Err(ParseError::Function(FunctionParseError::OverNotSupported));
+    }
+
+    if null_treatment.is_some() {
+        return Err(ParseError::Function(
+            FunctionParseError::NullTreatmentNotSupported,
+        ));
+    }
+
+    if !matches!(parameters, ast::FunctionArguments::None) {
+        return Err(ParseError::Function(
+            FunctionParseError::ParametersNotSupported,
+        ));
+    }
+
+    let function_name = from_function_name(name).map_err(ParseError::Function)?;
+
+    let args = match args {
+        ast::FunctionArguments::None => Ok(vec![]),
+        ast::FunctionArguments::Subquery(_) => Err(ParseError::Function(
+            FunctionParseError::SubQueryNotSupported,
+        )),
+        ast::FunctionArguments::List(function_argument_list) => {
+            from_function_argument_list(function_argument_list)
+        }
+    }?;
+
+    Ok(Expr::FunctionCall {
+        function_name,
+        args,
+    })
+}
+
+fn from_function_argument_list(
+    function_argument_list: &FunctionArgumentList,
+) -> Result<Vec<Expr>, ParseError> {
+    let FunctionArgumentList {
+        args,
+        clauses,
+        duplicate_treatment,
+    } = function_argument_list;
+
+    if !clauses.is_empty() {
+        return Err(ParseError::Function(
+            FunctionParseError::ClausesNotSupported,
+        ));
+    }
+
+    if duplicate_treatment.is_some() {
+        return Err(ParseError::Function(
+            FunctionParseError::DuplicateTreatmentNotSupported,
+        ));
+    }
+
+    args.iter()
+        .map(|arg| match arg {
+            FunctionArg::Named { .. } => todo!("what"),
+            FunctionArg::ExprNamed { .. } => todo!("who"),
+            FunctionArg::Unnamed(expr) => from_function_arg_expr(expr),
+        })
+        .collect()
+}
+
+fn from_function_arg_expr(arg: &FunctionArgExpr) -> Result<Expr, ParseError> {
+    match arg {
+        FunctionArgExpr::Expr(expr) => from_selection(expr),
+        _ => todo!("oh give up"),
+    }
+}
+
+fn from_function_name(object_name: &ast::ObjectName) -> Result<FunctionName, FunctionParseError> {
+    let ast::ObjectName(object_name_parts) = object_name;
+
+    let ident = if let Some(object_name_part) = object_name_parts.iter().next() {
+        let ast::ObjectNamePart::Identifier(name) = object_name_part;
+
+        Ok(name.value.as_str())
+    } else {
+        Err(FunctionParseError::EmptyObjectName)
+    }?;
+
+    match ident {
+        "sum" => Ok(FunctionName::Aggregate(AggregateFunctionName::Sum)),
+        _ => Err(FunctionParseError::UnknownFunctionName {
+            ident: ident.to_string(),
         }),
     }
 }
@@ -474,7 +613,7 @@ fn table_name_from_object_name(object_name: &ast::ObjectName) -> Result<TableNam
     }
 }
 
-fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column>>, ParseError> {
+fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Expr>>, ParseError> {
     if select_items.len() == 1 {
         if let Some(ast::SelectItem::Wildcard(_)) = select_items.first() {
             return Ok(None);
@@ -486,8 +625,8 @@ fn from_projection(select_items: &[ast::SelectItem]) -> Result<Option<Vec<Column
     for select_item in select_items {
         match select_item {
             ast::SelectItem::UnnamedExpr(expr) => {
-                let identifier = identifier_from_selection(expr)?;
-                fields.push(identifier);
+                let expr = from_selection(expr)?;
+                fields.push(expr);
             }
             _ => return Err(ParseError::UnsupportedProjectionField),
         }

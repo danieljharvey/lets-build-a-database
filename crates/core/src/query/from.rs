@@ -2,6 +2,7 @@ use crate::types::Cost;
 use crate::types::QueryStep;
 use crate::types::Row;
 use crate::types::Schema;
+use crate::types::SchemaColumn;
 use crate::types::TableAlias;
 use crate::types::{Column, TableName};
 use serde_json::json;
@@ -77,7 +78,9 @@ pub fn table_scan(table_name: &TableName, table_alias: Option<&TableAlias>) -> Q
         .collect();
 
     QueryStep {
-        schema: Schema { columns },
+        schema: Schema {
+            columns: columns.into_iter().map(SchemaColumn::Column).collect(),
+        },
         rows,
         cost,
     }

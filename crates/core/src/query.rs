@@ -4,6 +4,8 @@ mod join;
 mod order_by;
 mod project;
 
+use project::project_fields;
+
 use crate::types::{Limit, OrderBy};
 
 use super::types::QueryStep;
@@ -14,6 +16,9 @@ pub enum QueryError {
     ColumnNotFoundInSchema { column_name: Column },
     IndexNotFoundInSchema { index: usize },
     FilterError(filter::FilterError),
+    ArgumentNotFound,
+    TypeMismatch { expected: String },
+    CannotUseAggregateFunctionInFilter,
 }
 
 pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
@@ -51,12 +56,7 @@ pub fn run_query(query: &Query) -> Result<QueryStep, QueryError> {
                 mut cost,
             } = run_query(from)?;
 
-            let mut projected_rows = vec![];
-
-            for row in &rows {
-                cost.increment_rows_processed();
-                projected_rows.push(project::project_fields(row, &schema, fields)?);
-            }
+            let projected_rows = project_fields(&rows, &schema, fields, &mut cost)?;
 
             let schema = project::project_schema(&schema, fields)?;
 
@@ -296,6 +296,34 @@ mod tests {
         select ArtistId, Title from Album
         order by ArtistId, Title
         limit 4
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_single_row_aggregate() {
+        let query = parse(
+            r"
+        select sum(track.Milliseconds) from Track track
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_multiple_row_aggregate() {
+        let query = parse(
+            r"
+        select track.Name, sum(track.Milliseconds) from Track track where track.AlbumId = 1
     ",
         )
         .unwrap();

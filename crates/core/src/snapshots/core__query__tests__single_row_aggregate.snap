@@ -1,0 +1,9 @@
+---
+source: crates/core/src/query.rs
+expression: result.to_json()
+---
+[
+  {
+    "sum": 1378778040
+  }
+]
