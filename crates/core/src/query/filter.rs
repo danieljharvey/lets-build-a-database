@@ -68,14 +68,14 @@ pub fn evaluate_aggregate_expr(
 
 fn evaluate_function_call(
     function_name: &FunctionName,
-    args: &Vec<Expr>,
-    all_rows: &Vec<Row>,
+    args: &[Expr],
+    all_rows: &[Row],
     schema: &Schema,
 ) -> Result<serde_json::Value, QueryError> {
     match function_name {
         FunctionName::Aggregate(agg) => match agg {
             AggregateFunctionName::Sum => {
-                let expr = args.first().ok_or_else(|| QueryError::ArgumentNotFound)?;
+                let expr = args.first().ok_or(QueryError::ArgumentNotFound)?;
 
                 let sum = all_rows.iter().try_fold(0, |total, all_row| {
                     let value = evaluate_expr(all_row, schema, expr)?;

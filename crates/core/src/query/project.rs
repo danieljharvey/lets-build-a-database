@@ -55,8 +55,7 @@ fn index_for_expr(field: &Expr, schema: &Schema) -> Result<SchemaColumn, QueryEr
 
 fn is_aggregate_expr(expr: &Expr) -> bool {
     match expr {
-        Expr::Column { .. } => false,
-        Expr::Literal { .. } => false,
+        Expr::Column { .. } | Expr::Literal { .. } => false,
         Expr::BinaryOperation { left, right, .. } => {
             is_aggregate_expr(left) || is_aggregate_expr(right)
         }
@@ -103,7 +102,7 @@ pub fn project_fields(
         // then add regular fields
         for row in rows {
             cost.increment_rows_processed();
-            projected_rows.push(project_field_row(row, &schema, fields, &aggregate_results)?);
+            projected_rows.push(project_field_row(row, schema, fields, &aggregate_results)?);
         }
         Ok(projected_rows)
     }

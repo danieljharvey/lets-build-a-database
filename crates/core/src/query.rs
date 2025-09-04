@@ -306,10 +306,24 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_aggregate() {
+    fn test_single_row_aggregate() {
         let query = parse(
             r"
         select sum(track.Milliseconds) from Track track
+    ",
+        )
+        .unwrap();
+        let result = run_query(&query).unwrap();
+
+        insta::assert_json_snapshot!(result.to_json());
+        insta::assert_debug_snapshot!(result.cost);
+    }
+
+    #[test]
+    fn test_multiple_row_aggregate() {
+        let query = parse(
+            r"
+        select track.Name, sum(track.Milliseconds) from Track track where track.AlbumId = 1
     ",
         )
         .unwrap();

@@ -1,0 +1,46 @@
+---
+source: crates/core/src/query.rs
+expression: result.to_json()
+---
+[
+  {
+    "sum": 2400415,
+    "track.Name": "For Those About To Rock (We Salute You)"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Put The Finger On You"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Let's Get It Up"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Inject The Venom"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Snowballed"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Evil Walks"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "C.O.D."
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Breaking The Rules"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Night Of The Long Knives"
+  },
+  {
+    "sum": 2400415,
+    "track.Name": "Spellbound"
+  }
+]

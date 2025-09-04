@@ -242,7 +242,7 @@ impl Schema {
             .enumerate()
             .find(|(_, schema_column)| match schema_column {
                 SchemaColumn::Column(column_name) => column_name == column,
-                _ => false,
+                SchemaColumn::Named(_) => false,
             })
             .map(|(i, _)| i)
     }
@@ -253,7 +253,7 @@ impl Schema {
             .enumerate()
             .find(|(_, schema_column)| match schema_column {
                 SchemaColumn::Named(name) => name == named,
-                _ => false,
+                SchemaColumn::Column(_) => false,
             })
             .map(|(i, _)| i)
     }
